@@ -150,8 +150,7 @@ int ExecuteBatch(char *input_string){
 
 }
 
-int ExecuteChild(char *input_string)
-{
+int ExecuteChild(char *input_string) {
 	char * copy_string = malloc(sizeof(char)*256); 
 	strcpy(copy_string, input_string);
 
@@ -165,6 +164,11 @@ int ExecuteChild(char *input_string)
 
 	command = GetNewStrtok(copy_string, " ");
 	//Now, command has new command set that is separated by space bar.
+
+	if(!strcmp(command[0],"quit")) {
+		exit(0);
+	}	//If command is "quit" then shell just ends.
+
 	pid_t pid;
 
 	pid = fork();
@@ -229,9 +233,9 @@ char ** GetNewStrtok(char* input_string, char* tok){
 void ReplaceQuote(char * input_string){
 
 for (int cnt_i = 0; input_string[cnt_i] != '\0'; cnt_i++) {
-	if(input_string[cnt_i] == '\'' || input_string[cnt_i] == '\"')
-		input_string[cnt_i] = ' ';
-		// if function find quote it replace it to space bar.
-}
+	if(input_string[cnt_i] == '\'' || input_string[cnt_i] == '\"') {
+			input_string[cnt_i] = ' ';
+		}	// if function find quote it replace to space bar.
+	}
 
 }
