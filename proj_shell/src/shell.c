@@ -34,7 +34,7 @@ int main(int argc, char*argv[]){
 		command[cnt_i] = (char*)malloc(sizeof(char)*256);
 	}
 
-	while (1) {	//It end when user input"command"or"quit"or"Ctrl+d"
+	while (1) {	//It end when user input "quit"or"Ctrl+d"
 		do {
 			input_string[0] = '\0';
 
