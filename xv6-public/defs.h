@@ -119,7 +119,7 @@ void            sleep(void*, struct spinlock*);
 void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
-void            yield(void);
+int             yield(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -187,5 +187,6 @@ int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
 int		printk_str(char*);
 int		getppid(void);
+int		set_cpu_share(int);
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
