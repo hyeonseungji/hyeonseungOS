@@ -120,6 +120,7 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 int             yield(void);
+void		set_table(int);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

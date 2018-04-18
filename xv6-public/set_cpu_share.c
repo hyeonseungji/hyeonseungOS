@@ -10,7 +10,7 @@
 
 int set_cpu_share(int a){
 
-	myproc()->share = a;
+	set_table(a);
 	return a;
 
 }
