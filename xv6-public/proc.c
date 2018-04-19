@@ -18,6 +18,8 @@ static struct proc *initproc;
 int table_size = 1;
 int nextpid = 1;
 int max_pid;
+int max_sum;
+
 extern void forkret(void);
 extern void trapret(void);
 
@@ -31,8 +33,6 @@ struct {
   int is_stride;
   struct proc* proc;
 } stride_table[NSTRIDE];
-
-int end_num = 3;
 
 void
 pinit(void)
@@ -326,69 +326,65 @@ wait(void)
 }
 
 struct proc *
+MLFQ_in(struct proc * p)
+{
+return 0;
+}
+
+struct proc *
+MLFQ(void)
+{
+return 0;
+}
+
+struct proc *
 stride(void)
 {
- struct proc *p;
 
- acquire(&ptable.lock);
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-   /*if((p->state == RUNNABLE) && (p -> pid == 2)){
-    cprintf("return ready!\n");
-    return p;
-   }*/
-/*
-   if((end_num == 1) && (p->state == RUNNABLE)){
-    cprintf("no stride\n");
-    release(&ptable.lock);
-    return p;
-   }
-
-   for(int i = 1; i < end_num; i++){
-    if((stride_table[i].pid >= p->pid))
-     continue;
-    stride_table[i].full = 0;
-    table_size -= 1; 
-   } 
-   
-   if(table_size ==1){
-    release(&ptable.lock);
-    return 0;
-   }*/
-/*
-   for(int i = 1; i < NSTRIDE; i++) {
-    if((stride_table[i].pid == p->pid)&&(p->state == ZOMBIE)){
-     cprintf("x");
-     }
-    }*/
- }
- release(&ptable.lock);
   int minimum = 2147483647;
   int destination = 0;
 
-  for(int i = 3; i < max_pid+1; i++){
+  for(int i = /*0*/3; i < max_pid+1; i++){
+   if(i == 1 || i == 2) {
+    continue;
+   }
    if(stride_table[i].full ==1){
-   cprintf("p");
     if(stride_table[i].path < minimum){
      minimum = stride_table[i].path;
      destination = i;
     }
    }
   }
- stride_table[destination].path += stride_table[destination].share;
+
+ if(destination == 0){
+  stride_table[destination].path += (10000/stride_table[destination].share);
+  return MLFQ(); 
+ }
+
+ stride_table[destination].path += (10000/stride_table[destination].share);
  cprintf("In, [%d], path is [%d]\n",destination,stride_table[destination].path);
+
  return stride_table[destination].proc;
+ 
 }
 
 void set_table(int input){
- if(end_num > NSTRIDE-1){
+ if(max_pid > NSTRIDE-1){
   cprintf("don't set stride!\n");
   return ;
  }
+ max_sum += input;
+ if(max_sum > 80){
+  cprintf("[percentage over]you can't use stride\n");
+  max_sum -= input;
+  return ;
+ } 
  
- end_num++;
  table_size++;
+
  if (max_pid < myproc() -> pid)
   max_pid = myproc() -> pid;
+ stride_table[0].share = 100 - max_sum;
  stride_table[myproc() -> pid].share = input;
  stride_table[myproc() -> pid].pid = myproc() -> pid;
  stride_table[myproc() -> pid].full = 1;
@@ -411,8 +407,8 @@ scheduler(void)
   struct proc *p/*, *q*/;
   struct cpu *c = mycpu();
   c->proc = 0;
-
- stride_table[0].share = 70;
+ 
+ stride_table[0].share = 100;
  stride_table[0].pid = 2;
  stride_table[0].full = 1;
 
@@ -422,37 +418,44 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE) 
-        continue;
-    if(p -> pid == 2)
-     stride_table[0].proc = p;
+     if(p->state != RUNNABLE) 
+      continue;
 
-    if(stride_table[p->pid].is_stride == 1){ 
-     release(&ptable.lock);
-     p = stride();
-     acquire(&ptable.lock);
-    }
-    /*if(q -> pid ==1 || q -> pid ==2)
-     cprintf("!!!!!!!!!!!!!!!\n");*/
+     if(p -> pid != 1 && p -> pid != 2 && stride_table[p->pid].is_stride != 1)
+      MLFQ_in(p);
+
+     if(p->pid != 1 && p -> pid != 2 && stride_table[p->pid].is_stride == 1)
+      p = stride();
+
+     if(p -> pid == 2)
+      stride_table[0].proc = p;
+
+
+    /*if( stride_table[p->pid].is_stride != 1 ){
+     stride_table[p->pid].is_stride = 2;
+    }*/
+
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
-      if(p -> state == ZOMBIE){
+     c->proc = p;
+     switchuvm(p);
+     p->state = RUNNING;
+    /*  cprintf("process starts, pid:[%d],ticks[%d].\n",p->pid,ticks);*/
+     swtch(&(c->scheduler), p->context);
+     switchkvm();
+     if(p -> state == ZOMBIE){
 	stride_table[p->pid].full = 0;
 	stride_table[p->pid].is_stride = 0;
+	max_sum -= stride_table[p->pid].share;
+ 	stride_table[0].share = 100 - max_pid;
+        /*cprintf("process ends, pid:[%d],ticks[%d].\n",p->pid,ticks);*/
       }
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
-
     }
-    release(&ptable.lock);
-
+      release(&ptable.lock);
   }
 }
 
