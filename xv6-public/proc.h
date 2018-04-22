@@ -10,6 +10,15 @@ struct cpu {
   struct proc *proc;           // The process running on this cpu or null
 };
 
+struct {
+  int pid;
+  int share;
+  int full;
+  int path;
+  int is_stride;
+  struct proc* proc;
+} stride_table[NSTRIDE];
+
 struct mlfq{
  int my_tick;
  int spare_tick;

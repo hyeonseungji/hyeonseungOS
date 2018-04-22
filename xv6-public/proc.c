@@ -26,15 +26,6 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
-struct {
-  int pid;
-  int share;
-  int full;
-  int path;
-  int is_stride;
-  struct proc* proc;
-} stride_table[NSTRIDE];
-
 
 struct {
  int able_tick;

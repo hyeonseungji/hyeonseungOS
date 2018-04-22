@@ -11,8 +11,10 @@
 int set_cpu_share(int a){
 
 	set_table(a);
-	return a;
-
+        if(stride_table[myproc()->pid].share == a)
+		return a;
+        else
+        	return -1;
 }
 
 int sys_set_cpu_share(void){
