@@ -7,10 +7,10 @@ int main(int argc, char *argv[])
 	int pid;
 	/*printf(1,"my ppid is %d \n",getppid());*/
 	/*printf(1,"my pid is %d\n",getpid());*/
-        sleep(10);
-/*
+        sleep(30);
+
 for(int i = 0; i < 50; i++)        
-yield();*/	
+yield();
 	set_cpu_share(10);
 	for(int i = 0; i < 10; i++){
 	 pid = fork();

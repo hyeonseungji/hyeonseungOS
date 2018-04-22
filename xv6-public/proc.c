@@ -20,6 +20,7 @@ int nextpid = 1;
 int max_pid;
 int max_sum;
 int tick_mlfq;
+int tick_using;
 
 extern void forkret(void);
 extern void trapret(void);
@@ -48,7 +49,9 @@ struct mlfq{
 } mlfq[NSTRIDE];
 
 struct {
- int spare_tick;
+ int able_tick;
+ int rr_tick_limit;
+ int rr_tick;
  int size;
  struct mlfq * next;
  struct mlfq * head;
@@ -391,6 +394,7 @@ MLFQ_out(struct proc * p, int level, int code)
 	}
 
 	if(code == 0){
+        cprintf("ok!\n");
 	mlfq[p->pid].my_tick = 0;
 	mlfq[p->pid].sum_tick = 0;
 	mlfq[p->pid].next = 0;
@@ -398,7 +402,7 @@ MLFQ_out(struct proc * p, int level, int code)
 	mlfq[p->pid].is_mlfq = -1;
 	mlfq[p->pid].lev = -1;
         mlfq[p->pid].run = 0;
-	mlfq_lev[level].size -= 1;
+	mlfq_lev[level].size = mlfq_lev[level].size - 1;
         }
 
 	else{
@@ -412,52 +416,60 @@ MLFQ_out(struct proc * p, int level, int code)
 struct proc *
 MLFQ(void)
 {
- tick_mlfq = ticks - tick_mlfq;
+ tick_mlfq++;
+ if(tick_using != 0){
+ tick_using++;
+ }
+ if(tick_mlfq % 100 == 0){
+  for(int i = 1; i < 3; i++){
+   if(mlfq_lev[i].size <= 0){
+    continue;
+   }
+   else{
+   for(int p = 0; p < mlfq_lev[i].size; p++){
+     mlfq_lev[i].head -> run = 0;
+     struct proc * p = mlfq_lev[i].head->proc;
+     MLFQ_out(mlfq_lev[i].head->proc,i,0);
+     MLFQ_in(p,0,0);
+   }
+  }
+  }
+  cprintf("\n\nPriority Boosting Operated\n\n");
+ }
  for(int i = 0; i < 3; i++){
   if(mlfq_lev[i].size > 0){ //한 큐의 내용이 하나 이상인 경우,
-   cprintf("[lev %d]size:%d\n",i,mlfq_lev[i].size);
    }
   else
    continue;
-  // 현재 가리키고 있는 프로세스가 없으면, 큐의 첫번째 부분을 가리키고 그 마저 없으면 다음 큐로 넘어간다.
-
-  if(mlfq_lev[i].head->proc->state == SLEEPING){
-  cprintf("There is sleep process [%d]\n",mlfq_lev[i].head->proc->pid);
-   if(mlfq_lev[i].size == 1){
-       int toto = 0;
-       for(int x=0; x <3; x++){
-         if(x != i && mlfq_lev[x].size >= 1){
-          toto = 1;
-        }
-       }
-       if(toto == 1){
-        cprintf("There is another process, find it\n");
-        continue;
-       }
-      else{
-       cprintf("state change\n");
-       wakeup1(mlfq_lev[i].head->proc);
-       return mlfq_lev[i].head->proc;
-       }
+  for(int p = 0; p < mlfq_lev[i].size; p++){
+   if(mlfq_lev[i].head->proc->state != RUNNABLE){
+    mlfq_lev[i].head -> run = 0;
+    MLFQ_out(mlfq_lev[i].head->proc,i,1);
+   }
   }
- } //process가 sleep인 경우 적절한 처리를 해준다.
+  if(mlfq_lev[i].head->proc->state != RUNNABLE){
+   continue;
+  }
 
-/* (mlfq_lev[i].next)->proc->state = RUNNABLE;*/
-  if(mlfq_lev[i].size > 1 && (mlfq_lev[i].head -> run == 1)){ 
-//한 큐의 내용이 두 개 이상이고, 하나는 돌아간 적이 있는 프로세스라면,
+  if(mlfq_lev[i].size > 1 && (mlfq_lev[i].head -> run == 1) && mlfq_lev[i].rr_tick >=  mlfq_lev[i].rr_tick_limit){ 
+//한 큐의 내용이 두 개 이상이고, 돌아간 적이 있는 프로세스이며, time quantum이 지난 경우.
    mlfq_lev[i].head -> run = 0;
+   mlfq_lev[i].rr_tick = 0;
    MLFQ_out(mlfq_lev[i].head->proc,i,1);
   } //다음 프로세스가 있다면 그 쪽으로 작동 권한을 준다.
   else{
    mlfq_lev[i].head -> run = 0;
-  } //다음 프로세스가 없다면 큐의 맨 처음 프로세스에게 작동 권한을 준다.
- 
-  cprintf("[1]mlfq_lev[%d].cur is ",i);
+  } //다음 프로세스가 없거나, time quantum이 남아있거나 실행되지 않은 프로세스는  다시 한번 더  실행한다.
+ if(i >0){ 
+  cprintf("[]mlfq_lev[%d].cur is , size is [%d],",i,mlfq_lev[i].size);
   if(mlfq_lev[i].head == 0)
    cprintf("...0\n");
   else
    cprintf(" [%d]\n",mlfq_lev[i].head -> proc -> pid);
+  }
   mlfq_lev[i].head -> run = 1;
+
+  mlfq_lev[i].rr_tick++;
   return (mlfq_lev[i].head)->proc; 
  }
  cprintf("this is not\n"); // MLFQ에 어떤 프로세스도 없는 경우.
@@ -509,7 +521,6 @@ void set_table(int input){
  max_sum = max_sum + input; 
  cprintf("[Clear]max_sum[%d],pid[%d]\n",max_sum,myproc()->pid);
  table_size++;
- cprintf("table_size:%d\n",table_size);
  if (max_pid < myproc() -> pid)
   max_pid = myproc() -> pid;
  stride_table[0].share = 100 - max_sum;
@@ -540,6 +551,13 @@ scheduler(void)
  stride_table[0].share = 100;
  stride_table[0].pid = 2;
  stride_table[0].full = 1;
+
+ mlfq_lev[0].able_tick = 5;
+ mlfq_lev[1].able_tick = 10;
+ 
+ mlfq_lev[0].rr_tick_limit = 1;
+ mlfq_lev[0].rr_tick_limit = 2;
+ mlfq_lev[0].rr_tick_limit = 4;
 
   for(;;){
     // Enable interrupts on this processor.
@@ -614,7 +632,6 @@ scheduler(void)
       
       if(mlfq[p->pid].is_mlfq ==1){
       MLFQ_out(p,mlfq[p->pid].lev,0);
-      cprintf("and this was MLFQ\n");
       }
 
      
@@ -624,16 +641,15 @@ scheduler(void)
    else if(mlfq[p->pid].is_mlfq == 1 && stride_table[p->pid].is_stride == 1){
     cprintf("\n\n[stride]pid[%d],ticks[%d] is out from MLFQ\n\n",p->pid,mlfq[p->pid].sum_tick);
     MLFQ_out(p,mlfq[p->pid].lev,0);
-    cprintf("x2\n");
    }
    //여기까지, p가 stride를 선언한 경우
 
-  else if(mlfq[p->pid].is_mlfq == 1 && mlfq[p->pid].sum_tick >= 10){
-  cprintf("\n\n[tick over]pid[%d],ticks[%d] is out from MLFQ\n\n",p->pid,mlfq[p->pid].sum_tick);
+  else if(mlfq[p->pid].is_mlfq == 1 && mlfq[p->pid].sum_tick >= mlfq_lev[mlfq[p->pid].lev].able_tick){
   if(mlfq[p->pid].lev != 2){
-  MLFQ_out(p,mlfq[p->pid].lev,0);
-  MLFQ_in(p,(mlfq[p->pid].lev)+1,0);
-  cprintf("x1\n");
+   cprintf("\n\n[tick over]pid[%d],ticks[%d] is out from MLFQ\n\n",p->pid,mlfq[p->pid].sum_tick);
+   int x = mlfq[p->pid].lev;
+   MLFQ_out(p,x,0);
+   MLFQ_in(p,x+1,0);
   }
  }
  //여기까지, p의 time slice가 지난 경우.
