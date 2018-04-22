@@ -5,7 +5,7 @@
 int main(int argc, char *argv[])
 {
 	int pid;
-	/*printf(1,"my ppid is %d \n",getppid());*/
+	printf(1,"my lev is %d \n",getlev());
 	/*printf(1,"my pid is %d\n",getpid());*/
         sleep(30);
 

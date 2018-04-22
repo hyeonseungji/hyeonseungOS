@@ -10,6 +10,18 @@ struct cpu {
   struct proc *proc;           // The process running on this cpu or null
 };
 
+struct mlfq{
+ int my_tick;
+ int spare_tick;
+ int sum_tick;
+ int is_mlfq;
+ int lev;
+ int run;
+ struct mlfq * prev;
+ struct mlfq * next;
+ struct proc* proc;
+} mlfq[NSTRIDE];
+
 extern struct cpu cpus[NCPU];
 extern int ncpu;
 

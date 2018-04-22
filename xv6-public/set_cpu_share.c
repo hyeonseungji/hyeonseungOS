@@ -21,10 +21,4 @@ int sys_set_cpu_share(void){
 	 return -1;
 	return set_cpu_share(input);
 }
-/*
-int
-argint(int n, int *ip)
-{
-  return fetchint((myproc()->tf->esp) + 4 + 4*n, ip);
-}
-*/
+

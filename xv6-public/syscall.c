@@ -106,6 +106,7 @@ extern int sys_uptime(void);
 extern int sys_myfunction(void);
 extern int yield(void);
 extern int sys_set_cpu_share(void);
+extern int getlev(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -133,6 +134,7 @@ static int (*syscalls[])(void) = {
 [SYS_getppid] getppid,
 [SYS_yield]   yield,
 [SYS_set_cpu_share] sys_set_cpu_share,
+[SYS_getlev]  getlev,
 };
 
 void
