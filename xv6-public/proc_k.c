@@ -51,8 +51,8 @@ struct {
  int spare_tick;
  int size;
  struct mlfq * next;
- struct mlfq * head;
  struct mlfq * end;
+ struct mlfq * cur;
 } mlfq_lev[3];
 
 void
@@ -346,141 +346,213 @@ wait(void)
 }
 
 void
-MLFQ_in(struct proc * p, int level,int code)
+MLFQ_in(struct proc * p, int level)
 {
-
-if(code == 0){
- mlfq[p->pid].my_tick = 0;
- mlfq[p->pid].sum_tick = 0;
- mlfq[p->pid].is_mlfq = 1;
- mlfq[p->pid].lev = level;
- mlfq[p->pid].proc = p;
-}
-
+mlfq[p->pid].my_tick = 0;
+mlfq[p->pid].sum_tick = 0;
+mlfq[p->pid].is_mlfq = 1;
+mlfq[p->pid].lev = level;
+mlfq[p->pid].proc = p;
  if(mlfq_lev[level].size == 0){
-   mlfq[p->pid].prev = &mlfq[p->pid];
-   mlfq[p->pid].next = &mlfq[p->pid];
+   mlfq_lev[level].next = &mlfq[p->pid];
    mlfq_lev[level].end = &mlfq[p->pid];
-   mlfq_lev[level].head = &mlfq[p->pid];
+   mlfq_lev[level].cur = &mlfq[p->pid];
+   /*cprintf("in clear![%d]\n",p->pid);*/
  }
-
  else{
   mlfq[p->pid].prev = mlfq_lev[level].end;
-  mlfq[p->pid].next = mlfq_lev[level].head;
-  mlfq_lev[level].head -> prev = &mlfq[p->pid];
+  mlfq[p->pid].prev -> next = &mlfq[p->pid];
   mlfq_lev[level].end -> next = &mlfq[p->pid];
   mlfq_lev[level].end = &mlfq[p->pid];
+  cprintf("prev = [%d]\n",mlfq[p->pid].prev->proc->pid);
+  cprintf("prev->next = [%d]\n",mlfq[p->pid].prev->next->proc->pid);
  }
+ mlfq[p->pid].next = 0;
  mlfq_lev[level].size++;
 }
 
 void
-MLFQ_out(struct proc * p, int level, int code)
+MLFQ_out(struct proc * p, int level)
 {
-	if(mlfq_lev[level].size <= 0){
- 	panic("MLFQ OUT ERROR");
-	}
-	else if (mlfq_lev[level].size == 1){
-   	 mlfq_lev[level].end = 0;
-     	 mlfq_lev[level].head = 0;
-	}
-	else{
- 	mlfq_lev[level].head = mlfq_lev[level].head -> next;
- 	mlfq_lev[level].end -> next = mlfq_lev[level].head;
- 	mlfq_lev[level].head -> prev = mlfq_lev[level].end;
-	}
+/*cprintf("  out operated  ");*/
 
-	if(code == 0){
-	mlfq[p->pid].my_tick = 0;
-	mlfq[p->pid].sum_tick = 0;
-	mlfq[p->pid].next = 0;
-	mlfq[p->pid].prev = 0;
-	mlfq[p->pid].is_mlfq = -1;
-	mlfq[p->pid].lev = -1;
-        mlfq[p->pid].run = 0;
-	mlfq_lev[level].size -= 1;
-        }
-
-	else{
-	 mlfq_lev[level].size -= 1;
-	 mlfq[p->pid].next = 0;
-	 mlfq[p->pid].prev = 0;
-	 MLFQ_in(p,level,1);
-	}
-
+if(mlfq_lev[mlfq[p->pid].lev].cur == &mlfq[p->pid]){
+ cprintf("\njijijijijia\n");
+ if(mlfq[p->pid].next != 0)
+  mlfq_lev[mlfq[p->pid].lev].cur = mlfq[p->pid].next;
+ else{
+   cprintf("\njijijijib\n");
+   if(mlfq_lev[mlfq[p->pid].lev].next != mlfq_lev[mlfq[p->pid].lev].cur)
+    mlfq_lev[mlfq[p->pid].lev].cur = mlfq_lev[mlfq[p->pid].lev].next;
+   else{
+   }
+  }
 }
+
+mlfq[p->pid].my_tick = 0;
+mlfq[p->pid].sum_tick = 0;
+mlfq[p->pid].is_mlfq = -1;
+mlfq[p->pid].lev = -1;
+mlfq_lev[level].size -= 1;
+/*cprintf("size is %d [out]\n",mlfq_lev[level].size);*/
+if(mlfq_lev[level].next == &mlfq[p->pid]) //각 레벨의 큐의 첫번째 항목이었다면,
+ mlfq_lev[level].next = mlfq[p->pid].next;
+if(mlfq_lev[level].size == 0)
+ mlfq_lev[level].end = 0;
+
+if(&mlfq[p->pid] == mlfq_lev[level].end){
+ mlfq_lev[level].end = mlfq[p->pid].prev;
+}
+
+if(mlfq[p->pid].prev != 0)
+ mlfq[p->pid].prev -> next = mlfq[p->pid].next;
+
+mlfq[p->pid].next = 0; //end 만들어야
+/*cprintf("  out  ended   ");*/
+}
+
 struct proc *
 MLFQ(void)
 {
- tick_mlfq = ticks - tick_mlfq;
- for(int i = 0; i < 3; i++){
-  if(mlfq_lev[i].size > 0){ //한 큐의 내용이 하나 이상인 경우,
-   cprintf("[lev %d]size:%d\n",i,mlfq_lev[i].size);
-   }
-  else
-   continue;
-  // 현재 가리키고 있는 프로세스가 없으면, 큐의 첫번째 부분을 가리키고 그 마저 없으면 다음 큐로 넘어간다.
+tick_mlfq = ticks - tick_mlfq;
+for(int i = 0; i < 3; i++){
+/*cprintf("   MLFQ operated    \n");*/
 
-  if(mlfq_lev[i].head->proc->state == SLEEPING){
-  cprintf("There is sleep process [%d]\n",mlfq_lev[i].head->proc->pid);
-   if(mlfq_lev[i].size == 1){
-       int toto = 0;
-       for(int x=0; x <3; x++){
-         if(x != i && mlfq_lev[x].size >= 1){
-          toto = 1;
-        }
-       }
-       if(toto == 1){
-        cprintf("There is another process, find it\n");
-        continue;
-       }
-      else{
-       cprintf("state change\n");
-       wakeup1(mlfq_lev[i].head->proc);
-       return mlfq_lev[i].head->proc;
-       }
+/*cprintf("   first, mlfq_lev[%d].cur",i);*/
+/*if(mlfq_lev[i].cur == 0)
+  cprintf(" is 0\n");
+else
+  cprintf(" [%d] \n",mlfq_lev[i].cur -> proc -> pid);*/
+
+if(mlfq_lev[i].cur == 0){
+  if(mlfq_lev[i].next == 0)
+    continue;
+  mlfq_lev[i].cur = mlfq_lev[i].next;
+ }
+
+if(mlfq_lev[i].size > 0){
+ /*cprintf("   MLFQ check...    ");*/
+  cprintf("[lev %d]size:%d\n",i,mlfq_lev[i].size);
+ if((mlfq_lev[i].cur)->proc->state == ZOMBIE){
+  /*MLFQ_out(x->proc,i);
+  cprintf("[0]size:%d\n",mlfq_lev[i].size);
+  i -= 1;*/
+ }
+ else if(stride_table[mlfq_lev[i].cur->proc->pid].is_stride == 1){
+  /*cprintf("\n\n[stride]pid[%d],ticks[%d] is out from MLFQ\n\n",mlfq_lev[i].cur->proc->pid,mlfq_lev[i].cur->sum_tick);
+  struct mlfq *x = mlfq_lev[i].cur;
+  mlfq_lev[i].cur = mlfq_lev[i].cur -> next;
+  MLFQ_out(x->proc,i);
+  i -= 1;*/
+}
+ else if((mlfq_lev[i].cur)->sum_tick >= 10){
+  cprintf("\n\n[tick over]pid[%d],ticks[%d] is out from MLFQ[%d]\n\n",mlfq_lev[i].cur->proc->pid,mlfq_lev[i].cur->sum_tick,i);
+  if(i != 2){
+  struct mlfq *x = mlfq_lev[i].cur;
+  /*mlfq_lev[i].cur = mlfq_lev[i].cur -> next;*/
+  MLFQ_out(x->proc,i);
+  MLFQ_in(x->proc,i+1);
+   i -= 1;
   }
- } //process가 sleep인 경우 적절한 처리를 해준다.
+  if(i == 2)
+   return (mlfq_lev[i].cur)->proc;
+ }
+ else{
+} // 지금까지 실행한 process들의 상태를 보고 해석한 if문
+ 
+ if(mlfq_lev[i].cur == 0){
+   if(mlfq_lev[i].next == 0)
+     continue;
+   mlfq_lev[i].cur = mlfq_lev[i].next;
+   cprintf("adfaewf\n");
+ } // 현재 가리키고 있는 프로세스가 없으면, 큐의 첫번째 부분을 가리키고 그 마저 없으면 다음 큐로 넘어간다.
+
+ if(mlfq_lev[i].cur->proc->state == SLEEPING){
+  if(mlfq_lev[i].cur -> next != 0)
+   mlfq_lev[i].cur = mlfq_lev[i].cur -> next;
+  else{
+   if(mlfq_lev[i].next != mlfq_lev[i].cur)
+    mlfq_lev[i].cur = mlfq_lev[i].next;
+   else{
+      continue;
+   }
+  }
+}
 
 /* (mlfq_lev[i].next)->proc->state = RUNNABLE;*/
-  if(mlfq_lev[i].size > 1 && (mlfq_lev[i].head -> run == 1)){ 
-//한 큐의 내용이 두 개 이상이고, 하나는 돌아간 적이 있는 프로세스라면,
-   mlfq_lev[i].head -> run = 0;
-   MLFQ_out(mlfq_lev[i].head->proc,i,1);
-  } //다음 프로세스가 있다면 그 쪽으로 작동 권한을 준다.
-  else{
-   mlfq_lev[i].head -> run = 0;
-  } //다음 프로세스가 없다면 큐의 맨 처음 프로세스에게 작동 권한을 준다.
- 
+  if(mlfq_lev[i].size > 1 && (mlfq_lev[i].cur -> run == 1)){
+     /*cprintf("It already run...   ");*/
+     mlfq_lev[i].cur -> run = 0;
+     if(mlfq_lev[i].cur -> next != 0){
+      mlfq_lev[i].cur = mlfq_lev[i].cur -> next;
+      /*cprintf("I selected the next process..     ");*/
+     }
+     else{
+      mlfq_lev[i].cur = mlfq_lev[i].next;
+      /*cprintf("I selected the first process....    ");*/
+     }
+  } // 
+  if(mlfq_lev[i].size == 1){ // size is just one, next one is just first array.
+   mlfq_lev[i].cur -> run = 0;
+   mlfq_lev[i].cur = mlfq_lev[i].next;
+  }
+  /*if(i == 0)
+   cprintf("ffufufuf\n");*/
   cprintf("[1]mlfq_lev[%d].cur is ",i);
-  if(mlfq_lev[i].head == 0)
+  if(mlfq_lev[i].cur == 0)
    cprintf("...0\n");
   else
-   cprintf(" [%d]\n",mlfq_lev[i].head -> proc -> pid);
-  mlfq_lev[i].head -> run = 1;
-  return (mlfq_lev[i].head)->proc; 
- }
- cprintf("this is not\n"); // MLFQ에 어떤 프로세스도 없는 경우.
- return 0;
+   cprintf(" [%d]\n",mlfq_lev[i].cur -> proc -> pid);
+  mlfq_lev[i].cur -> run = 1;
+  /*cprintf("return.......");*/
+  return (mlfq_lev[i].cur)->proc;
+  
 }
-
+}
+cprintf("this is not....\n");
+return 0;
+}
 
 struct proc *
-stride(int destination)
+stride(struct proc * p)
 {
- if(stride_table[destination].share < 0)
-  panic("no!");
- stride_table[destination].path += (10000/stride_table[destination].share);
- cprintf("In, [%d], path is [%d]\n",destination,stride_table[destination].path);
 
- return stride_table[destination].proc;
+  if(stride_table[p->pid].is_stride != 1){
+      if(mlfq[p->pid].is_mlfq == 0){
+       MLFQ_in(p,0); // case of new process, if so, new process go to MLFQ.
+       cprintf("\n\ni'm mlfq[%d]\n\n",p->pid);
+       MLFQ();
+       /*p = stride();*/
+      }
+  } // after finish MLFQ, all the if gone(except pid !=2)
+
+  int minimum = 2147483647;
+  int destination = 0;
+  if(table_size == 0){
+   struct proc * p;
+   p = MLFQ();
+   cprintf("[[[%d]]]",p->state);
+   if(p != 0)
+    return p;
+   else
+    return stride_table[2].proc;
+  }
+for(int i = 0; i < 3; i++){
+ if(mlfq_lev[i].size > 0){
+  if(mlfq_lev[i].cur == 0)
+    cprintf("100 error!\n");
+  if(stride_table[mlfq_lev[i].cur->proc->pid].is_stride == 1){
+   cprintf("\n\n[stride]pid[%d],ticks[%d] is out from MLFQ\n\n",mlfq_lev[i].cur->proc->pid,mlfq_lev[i].cur->sum_tick);
+   struct mlfq *x = mlfq_lev[i].cur;
+   /*mlfq_lev[i].cur = mlfq_lev[i].cur -> next;*/
+   MLFQ_out(x->proc,i);
+  }
+ }
 }
 
+while(1){
 
-int path_cal(void)
-{
-  int destination = 0;
-  int minimum = 2147483647;
+  minimum = 2147483647;
   for(int i = 0; i < max_pid+1; i++){
    if(i == 1 || i == 2) {
     continue;
@@ -492,8 +564,26 @@ int path_cal(void)
     }
    }
   }
-  
- return destination;
+ if(destination == 0){
+  stride_table[destination].path += (10000/stride_table[destination].share);
+  struct proc * ret = MLFQ();
+  cprintf("In, [%d], path is [%d], share is [%d]\n",destination,stride_table[destination].path,stride_table[destination].share);
+  if(ret != 0){
+   cprintf("[[[%d]]]",p->state);
+   return ret;
+   }
+  else
+   continue;
+ }
+
+ break;
+
+}
+ stride_table[destination].path += (10000/stride_table[destination].share);
+ cprintf("not mlfq,In, [%d], path is [%d]\n",destination,stride_table[destination].path);
+
+ return stride_table[destination].proc;
+ 
 }
 
 void set_table(int input){
@@ -501,13 +591,13 @@ void set_table(int input){
   cprintf("don't set stride!\n");
   return ;
  }
- if(max_sum + input > 80){
+ max_sum += input;
+ if(max_sum > 80){
   cprintf("[percentage over]you can't use stride\n");
-  cprintf("[FAIL]max_sum[%d],pid[%d]\n",max_sum,myproc()->pid);
+  max_sum -= input;
   return ;
  } 
- max_sum = max_sum + input; 
- cprintf("[Clear]max_sum[%d],pid[%d]\n",max_sum,myproc()->pid);
+ 
  table_size++;
  cprintf("table_size:%d\n",table_size);
  if (max_pid < myproc() -> pid)
@@ -532,11 +622,10 @@ void set_table(int input){
 void
 scheduler(void)
 {
-  struct proc *p, *q;
+  struct proc *p/*, *q*/;
   struct cpu *c = mycpu();
   c->proc = 0;
-  int result; 
-
+ 
  stride_table[0].share = 100;
  stride_table[0].pid = 2;
  stride_table[0].full = 1;
@@ -547,6 +636,10 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+     if(/*stride_table[p->pid].is_stride == 1*/p -> pid > 2 && (p -> state == RUNNABLE)){
+      p = stride(p);
+      /*cprintf("[[[%d]]]\n",p->state);*/
+    }
      /*if (p-> pid != 1 && p -> pid != 2 && (p -> state == 2)){
       p->state = RUNNABLE;
       p->chan = 0;
@@ -554,32 +647,10 @@ scheduler(void)
      if(p->state != RUNNABLE) {
       continue;
      }
-
-      if(mlfq[p->pid].is_mlfq == 0 && stride_table[p->pid].is_stride == 0 && p->pid > 2){
-       MLFQ_in(p,0,0); // case of new process, if so, new process go to MLFQ.
-      }
-
-     result = path_cal();
-
-
-     if((result != 0) && (p -> pid) > 2){
-      p = stride(result);
-    }
-
-     if((result == 0) && (p -> pid) > 2){
-       q = stride(result);
-       q = MLFQ();
-       if(q != 0){
-         p = q;
-       }
-     }
-     if(p->state != RUNNABLE) {
-      continue;
-     }
-/*
      if(p -> pid == 2)
       stride_table[2].proc = p;
-*/
+
+
     /*if( stride_table[p->pid].is_stride != 1 ){
      stride_table[p->pid].is_stride = 2;
     }*/
@@ -591,62 +662,39 @@ scheduler(void)
      switchuvm(p);
      p->state = RUNNING;
 
-     mlfq[p->pid].my_tick = ticks;
-     
+     cprintf("%d\n",stride_table[0].share);
+     if(mlfq[p->pid].is_mlfq==1){ //if p is mlfq program
+       mlfq[p->pid].my_tick = ticks;
+     }
+
      swtch(&(c->scheduler), p->context);
      switchkvm();
      mlfq[p->pid].sum_tick = mlfq[p->pid].sum_tick + (ticks - mlfq[p->pid].my_tick);
-    
-    if(p->pid != 1){ 
+    if(p->pid != 1) 
       cprintf("consumes, pid:[%d],ticks[%d].\n",p->pid,mlfq[p->pid].sum_tick);
-    }
-
-    if(p -> state == ZOMBIE){
-     if(stride_table[p->pid].is_stride == 1){
-      stride_table[p->pid].full = 0;
-      stride_table[p->pid].is_stride = 0;
-      max_sum = max_sum - stride_table[p->pid].share;
-      cprintf("max_sum is %d\n",max_sum);
-      table_size -= 1;
-      stride_table[0].share = 100 - max_sum;
-     }
-      cprintf("\n\n[Process end]pid[%d],ticks[%d] is End\n\n",p->pid,mlfq[p->pid].sum_tick);
-      
-      if(mlfq[p->pid].is_mlfq ==1){
-      MLFQ_out(p,mlfq[p->pid].lev,0);
-      cprintf("and this was MLFQ\n");
+     if(p -> state == ZOMBIE){
+	if(stride_table[p->pid].is_stride == 1){
+        stride_table[p->pid].full = 0;
+	stride_table[p->pid].is_stride = 0;
+	max_sum -= stride_table[p->pid].share;
+	table_size -= 1;
+        if(max_pid > 80)
+         cprintf("\n\n\n\n\n\n\n\n\n");
+ 	stride_table[0].share = 100 - max_pid;
+        }
+        if(mlfq[p->pid].is_mlfq == 1){
+         cprintf("\n\n[Process end]pid[%d],ticks[%d] is out from MLFQ\n\n",p->pid,mlfq[p->pid].sum_tick);
+         struct mlfq *x = mlfq_lev[mlfq[p->pid].lev].cur;
+         mlfq_lev[mlfq[p->pid].lev].cur = mlfq_lev[mlfq[p->pid].lev].cur -> next;
+         MLFQ_out(x->proc,mlfq[p->pid].lev);
+       }
       }
-
-     
-    }
-   //여기까지, p가 종료된 경우.
-
-   else if(mlfq[p->pid].is_mlfq == 1 && stride_table[p->pid].is_stride == 1){
-    cprintf("\n\n[stride]pid[%d],ticks[%d] is out from MLFQ\n\n",p->pid,mlfq[p->pid].sum_tick);
-    MLFQ_out(p,mlfq[p->pid].lev,0);
-    cprintf("x2\n");
-   }
-   //여기까지, p가 stride를 선언한 경우
-
-  else if(mlfq[p->pid].is_mlfq == 1 && mlfq[p->pid].sum_tick >= 10){
-  cprintf("\n\n[tick over]pid[%d],ticks[%d] is out from MLFQ\n\n",p->pid,mlfq[p->pid].sum_tick);
-  if(mlfq[p->pid].lev != 2){
-  MLFQ_out(p,mlfq[p->pid].lev,0);
-  MLFQ_in(p,(mlfq[p->pid].lev)+1,0);
-  cprintf("x1\n");
-  }
- }
- //여기까지, p의 time slice가 지난 경우.
-  
-  else{
-  }
-
       // Process is done running for now.
       // It should have changed its p->state before coming back.
-  c->proc = 0;
- }
- release(&ptable.lock);
-}
+      c->proc = 0;
+    }
+      release(&ptable.lock);
+  }
 }
 
 // Enter scheduler.  Must hold only ptable.lock
