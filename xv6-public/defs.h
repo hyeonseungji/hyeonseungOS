@@ -190,5 +190,6 @@ int		printk_str(char*);
 int		getppid(void);
 int		set_cpu_share(int);
 int		getlev(void);
+int		thread_create(thread_t *, void * (*start_routine)(void*), void * );
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

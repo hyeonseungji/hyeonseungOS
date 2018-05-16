@@ -31,6 +31,7 @@ OBJS = \
 	getppid.o\
 	set_cpu_share.o\
         getlev.o\
+	thread_create.o\
 # Cross-compiling (e.g., on Mac OS X)
 # TOOLPREFIX = i386-jos-elf
 

@@ -55,6 +55,15 @@ struct context {
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+struct thread {
+  uint sz;                     // Size of process memory (bytes)
+  pde_t* pgdir;                // Page table
+  char *kstack;                // Bottom of kernel stack for this process
+  int tid;                     // Thread ID
+  struct trapframe *tf;        // Trap frame for current syscall
+  struct context *context;     // swtch() here to run process
+};
+
 // Per-process state
 struct proc {
   uint sz;                     // Size of process memory (bytes)
@@ -71,6 +80,8 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   int share;		       // used in stride scheduling
+  struct thread thread[100];   // thread per one process(total 100)
+  int tid;		       // number of theread that process made
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -78,3 +89,6 @@ struct proc {
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
+
+int thread_create_os(thread_t* thread, void*(*start_routine)(void*),void * arg);
+

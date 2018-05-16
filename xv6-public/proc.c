@@ -793,3 +793,114 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+void threadret(void){
+ cprintf("threadret : done\n");
+}
+
+int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg){
+	
+	cprintf("3, %p\n",start_routine);
+	cprintf("4, %d\n",(int)arg);
+	cprintf("5, %d\n",thread);
+	struct proc * p = myproc();
+	struct thread t;
+	uint sz,ustack[5];
+	uint sp =0;
+	char* usp;
+	cprintf("thread_create:[1]\n");
+	
+	if((t.kstack = kalloc()) == 0) {
+
+	        cprintf("kalloc:error!\n");
+		return -1;
+	}
+	
+	cprintf("thread_create:[2]\n");
+
+	t.tid = (p->tid)++;
+	p->thread[t.tid] = t;
+	usp = t.kstack + KSTACKSIZE;
+	usp -= sizeof *p->tf;
+	t.tf = (struct trapframe*)usp;
+	
+
+	cprintf("thread_create:[3]\n");
+	usp -= 4;
+	*(uint*)usp = (uint)trapret; //과연?
+
+	usp -= sizeof *t.context;
+	t.context = (struct context*)usp;
+	memset(t.context, 0, sizeof *t.context);
+	t.context -> eip = (uint)threadret; // 과연? 혹은  forkret
+	
+	cprintf("thread_create:[4]\n");
+	*t.tf = *p -> tf;
+	t.tf -> eax = 0; //과연? 일단 커널 스택 할당 끝.
+
+	sp = (uint)usp;
+	sz = PGROUNDUP(p->sz);
+	if((sz = allocuvm(p->pgdir, sz, sz + 2*PGSIZE)) == 0){
+	 cprintf("allocuvm: error!\n");
+	 return -1;
+	}
+
+	cprintf("thread_create:[5]\n");
+	clearpteu(p->pgdir, (char*)(sz - 2*PGSIZE));
+	sp = sz;
+
+	sp = (sp - 4) & ~3;
+
+	if(copyout(p->pgdir, sp, arg, 4) < 0) {
+	 cprintf("copyout: error!\n");
+	 return -1;
+	}
+
+	ustack[3] = sp;
+	ustack[4] = 0;
+
+	ustack[0] = 0xffffffff;  // fake return PC
+	ustack[1] = 1;
+	ustack[2] = sp - (2*4);  // argv pointer
+
+	sp -= 5 * 4;
+
+	if(copyout(p->pgdir, sp, ustack, 5*4) < 0) {
+	 cprintf("copuout[2]: error!\n");
+	 return -1;
+	}
+
+	t.sz = sz;
+	t.tf -> eip = (uint)start_routine;
+	t.tf -> esp = sp;
+
+	cprintf("1, %p\n",p->tf->eip);
+	cprintf("2, %p\n",t.tf->eip);
+	p->tf -> eip = t.tf -> eip;
+	p->tf -> esp = t.tf -> esp;
+	p->sz = t.sz;
+	cprintf("3, %p\n",(void*)start_routine);
+	cprintf("2, %p\n",t.tf->eip);
+	*p->kstack = *t.kstack;
+
+	*p->context = *t.context;
+
+	*thread = t.tid;
+
+
+	//need to switch for this thread	
+	cprintf("thread_create:[1]\n");
+	return 0;
+}
+
+int thread_join(thread_t* thread, void ** retval){
+  
+          cprintf("thread_join : clear\n");
+          return 0;
+}
+
+void thread_exit(void *retval){
+  
+          cprintf("thread_exit : clear\n");
+}
+

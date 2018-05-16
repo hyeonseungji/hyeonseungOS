@@ -28,6 +28,9 @@ int getppid(void);
 int yield(void);
 int set_cpu_share(int);
 int getlev(void);
+int thread_create(thread_t* /*thread*/, void*(*start_routine)(void*),void *);
+void thread_exit(void *);
+int thread_join(thread_t, void **);
 // ulib.c
 int stat(char*, struct stat*);
 char* strcpy(char*, char*);
