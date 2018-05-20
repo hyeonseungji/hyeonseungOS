@@ -12,5 +12,14 @@
 void thread_exit(void *retval){
 
 	cprintf("thread_exit : clear\n");
+	thread_exit_os(retval);
+}
 
+int thread_exit_w(void) {
+
+	void * input;
+	if(argptr(0, (char**)&input, sizeof(input)) < 0)
+	  return -1;
+	thread_exit((void*)input);
+	return -1;
 }

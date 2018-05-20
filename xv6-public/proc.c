@@ -791,10 +791,6 @@ procdump(void)
   }
 }
 
-void threadret(void){
- cprintf("threadret : done\n");
-}
-
 int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg){
 	
 	struct proc * p = myproc();
@@ -818,7 +814,6 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
         safestrcpy(np->name, p->name, sizeof(p->name));
        //커널 스택 할당 끝.
 
-	cprintf("p->sz:%d\n",p->sz);
 	sz = PGROUNDUP(p->sz);
 	if((sz = allocuvm(p->pgdir, sz, sz + 2*PGSIZE)) == 0){
 	 cprintf("allocuvm: error!\n");
@@ -833,24 +828,15 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
 	 return -1;
 	}
 
-/*
-	ustack[3] = sp;
-	ustack[4] = 0;
-*/
 	ustack[0] = 0xffffffff;  // fake return PC
-	ustack[1] = (uint)arg; //이게 arg?
+	ustack[1] = (uint)arg; 
 	ustack[2] = 0;
-/*	ustack[2] = sp - (2*4);  // argv pointer
-*/
 	sp -= 3 * 4;
 	if(copyout(p->pgdir, sp, ustack, 3*4) < 0) {
 	 cprintf("copuout[2]: error!\n");
 	 return -1;
 	}
 
-	cprintf("[%p]sp:%p and %d\n",(int*)sp,*(int*)(sp),*(int*)sp);
-	cprintf("[%p]sp+4(argc):%p and %d\n",(int*)(sp+4),*(int*)(sp+4),*(int*)(sp+4));
-	cprintf("[%p]sp+8(addr of addr of arg0):%p and %d\n",(int*)(sp+8),*(int*)(sp+8),*(int*)(sp+8));
 
 	np -> pgdir = p -> pgdir;
 	np->sz = sz;
@@ -862,19 +848,111 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
 	acquire(&ptable.lock);
 	np -> state = RUNNABLE;
 	release(&ptable.lock);
-	/*switchuvm(np);*/
 	cprintf("thread_create:end\n");
 	return 0;
 }
 
-int thread_join(thread_t* thread, void ** retval){
+int thread_join_os(thread_t* thread, void ** retval){
   
-          cprintf("thread_join : clear\n");
-          return 0;
+  struct proc *p;
+  int havekids, pid;
+  struct proc *curproc = myproc();
+  
+  acquire(&ptable.lock);
+  for(;;){
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent != curproc)
+        continue;
+      havekids = 1;
+      if(p->state == ZOMBIE){
+        // Found one.
+        pid = p->pid;
+        kfree(p->kstack);
+        p->kstack = 0;
+        /*freevm(p->pgdir);*/ //이 부분은 수정요망.
+  	/*uint i;*/
+
+  	if(p->pgdir == 0)
+    	  panic("freevm: no pgdir");
+  	deallocuvm(p->pgdir, p->sz, (p->sz)-4*PGSIZE);
+       
+        if(p->parent->sz == p->sz) {
+	  p->parent->sz = (p->sz)-4*PGSIZE;
+	}
+	  
+        /*
+  	for(i = 0; i < NPDENTRIES; i++){
+    	  if(pgdir[i] & PTE_P){
+      	    char * v = P2V(PTE_ADDR(pgdir[i]));
+            kfree(v);
+   	  }	
+ 	}
+  	kfree((char*)pgdir);}*/
+
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        p->state = UNUSED;
+        release(&ptable.lock);
+        return pid;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || curproc->killed){
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(curproc, &ptable.lock);  //DOC: wait-sleep
+  }
 }
 
-void thread_exit(void *retval){
-  
-          cprintf("thread_exit : clear\n");
+void thread_exit_os(void *retval){
+ 
+  struct proc *curproc = myproc();
+  struct proc *p;
+  int fd;
+  if(curproc == initproc)
+    panic("init exiting");
+
+  // Close all open files.
+  for(fd = 0; fd < NOFILE; fd++){
+    if(curproc->ofile[fd]){
+      fileclose(curproc->ofile[fd]);
+      curproc->ofile[fd] = 0;
+    }
+  }
+
+  begin_op();
+  iput(curproc->cwd);
+  end_op();
+  curproc->cwd = 0;
+
+  curproc->retval = retval;
+
+  acquire(&ptable.lock);
+  wakeup1(curproc->parent);
+
+  // Pass abandoned children to init.
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->parent == curproc){
+      p->parent = initproc;
+      if(p->state == ZOMBIE)
+        wakeup1(initproc);
+    }
+  }
+
+  cprintf("\n\nexit!%d\n",myproc()->pid);
+  // Jump into the scheduler, never to return.
+  curproc->state = ZOMBIE;
+  sched();
+  panic("zombie exit");
 }
+
+
 

@@ -82,6 +82,7 @@ struct proc {
   int share;		       // used in stride scheduling
   struct thread thread[100];   // thread per one process(total 100)
   int tid;		       // number of theread that process made
+  void* retval;		       // return value of thread
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -91,4 +92,5 @@ struct proc {
 //   expandable heap
 
 int thread_create_os(thread_t* thread, void*(*start_routine)(void*),void * arg);
-
+int thread_join_os(thread_t* thread, void** retval);
+void thread_exit_os(void *retval);
