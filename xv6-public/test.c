@@ -15,9 +15,8 @@ main(int argc, char *argv[])
   thread_t t1 = 2;
   thread_create(&t1, printj, (void *)3);
   printf(1,"t1:%d\n",t1);
-  int a = 30;
-  printf(1,"I sleep for %d\n",a);
   thread_join(t1, &retval);
+  printf(1,"I sleep for %d\n",(int)retval);
   exit();
 }
 

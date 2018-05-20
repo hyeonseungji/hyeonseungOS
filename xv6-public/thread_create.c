@@ -10,9 +10,9 @@
 
 int thread_create(thread_t* thread, void*(*start_routine)(void*),void * arg){
 
-	cprintf("tid is %d\n",*thread);
+	/*cprintf("tid is %d\n",*thread);
 	cprintf("routine is %p\n",*(int*)start_routine);
-	cprintf("arg is %d\n",(int)arg);
+	cprintf("arg is %d\n",(int)arg);*/
 	return thread_create_os(thread, start_routine, arg);
 }
 

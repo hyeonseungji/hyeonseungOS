@@ -873,14 +873,15 @@ int thread_join_os(thread_t* thread, void ** retval){
         p->kstack = 0;
         /*freevm(p->pgdir);*/ //이 부분은 수정요망.
   	/*uint i;*/
-
+	*retval = (void*)p -> retval;
+        if(p->parent->sz == p->sz) {
+	  p->parent->sz = (p->sz)-2*PGSIZE;
+	}
+  	deallocuvm(p->pgdir, p->sz, (p->sz)-2*PGSIZE);
+       
   	if(p->pgdir == 0)
     	  panic("freevm: no pgdir");
-  	deallocuvm(p->pgdir, p->sz, (p->sz)-4*PGSIZE);
-       
-        if(p->parent->sz == p->sz) {
-	  p->parent->sz = (p->sz)-4*PGSIZE;
-	}
+
 	  
         /*
   	for(i = 0; i < NPDENTRIES; i++){
@@ -890,7 +891,6 @@ int thread_join_os(thread_t* thread, void ** retval){
    	  }	
  	}
   	kfree((char*)pgdir);}*/
-
         p->pid = 0;
         p->parent = 0;
         p->name[0] = 0;
