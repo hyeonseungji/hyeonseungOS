@@ -92,5 +92,5 @@ struct proc {
 //   expandable heap
 
 int thread_create_os(thread_t* thread, void*(*start_routine)(void*),void * arg);
-int thread_join_os(thread_t* thread, void** retval);
+int thread_join_os(thread_t thread, void** retval);
 void thread_exit_os(void *retval);

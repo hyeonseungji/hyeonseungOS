@@ -852,7 +852,7 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
 	return 0;
 }
 
-int thread_join_os(thread_t* thread, void ** retval){
+int thread_join_os(thread_t thread, void ** retval){
   
   struct proc *p;
   int havekids, pid;
@@ -863,7 +863,7 @@ int thread_join_os(thread_t* thread, void ** retval){
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != curproc)
+      if((p->parent != curproc) || (p -> pid != thread))
         continue;
       havekids = 1;
       if(p->state == ZOMBIE){

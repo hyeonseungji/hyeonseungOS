@@ -8,8 +8,8 @@
 #include "proc.h"
 
 
-int thread_join(thread_t* thread, void ** retval){
-
+int thread_join(thread_t thread, void ** retval){
+	cprintf("thread_on join is %d\n",thread);
 	return thread_join_os(thread, retval);
 
 }
@@ -22,5 +22,5 @@ int thread_join_w(void) {
 	  return -1;
 	if(argptr(1,(char**)&input2,sizeof(input2)) < 0)
 	  return -1;
-	return thread_join(input, (void **)input2);
+	return thread_join((thread_t)input, (void **)input2);
 }
