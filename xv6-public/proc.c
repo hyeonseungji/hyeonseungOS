@@ -103,8 +103,10 @@ allocproc(void)
 
 found:
   p->state = EMBRYO;
+  if(nextpid > 10000){
+	nextpid = 3;
+  }
   p->pid = nextpid++;
-
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -302,6 +304,12 @@ wait(void)
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
+	for(int i = 1; i < 100; i++){
+	 if(p->thread[i] == 1){
+		cprintf("i here boys\n");
+		break;
+	 }
+	}
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
@@ -556,6 +564,11 @@ scheduler(void)
      if(p->state != RUNNABLE) {
       continue;
      }
+     if(p->tid != 0) {
+	if(p->parent->state == UNUSED || p->parent->state == EMBRYO || p->parent->state == ZOMBIE){
+		cprintf("pid:%d, ppid:%d , exit maybe\n",p->pid,p->parent->pid);
+	}
+      }
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -676,7 +689,6 @@ void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-  
   if(p == 0)
     panic("sleep");
 
@@ -791,6 +803,22 @@ procdump(void)
   }
 }
 
+uint mapper(struct proc * p){
+	uint i;
+
+	for(i = 1; i < 100; i++){
+		if(p->thread[i] == 0) {
+			p->thread[i] = 1;
+			if(p->mtid <= i) {
+				p -> mtid = i;
+			}
+			break;
+		}
+	}
+
+	return i;
+}
+
 int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg){
 	
 	struct proc * p = myproc();
@@ -814,7 +842,13 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
         safestrcpy(np->name, p->name, sizeof(p->name));
        //커널 스택 할당 끝.
 
-	sz = PGROUNDUP(p->sz);
+	if(p->osz == 0) {	//Original Size of Process(except user stack) set.
+		p->osz = PGROUNDUP(p->sz);
+		cprintf("osz:%d\n",p->osz);
+	}
+
+	sz = PGROUNDUP((p->osz)+(2*((np->tid = mapper(p))-1)*PGSIZE));   //PGROUNDUP(p->sz);
+
 	if((sz = allocuvm(p->pgdir, sz, sz + 2*PGSIZE)) == 0){
 	 cprintf("allocuvm: error!\n");
 	 return -1;
@@ -839,8 +873,12 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
 
 
 	np -> pgdir = p -> pgdir;
+
 	np->sz = sz;
-	p -> sz = sz;
+	p -> sz = (p->osz)+(2*((p->mtid))*PGSIZE);
+	/*if(np -> pid > 4570)
+	cprintf("sz:%d, tid:%d, pid:%d, psz:%d\n",np->sz, np->tid, np->pid,p->sz);
+*/
 	np-> tf -> eip = (uint)start_routine;
 	np -> tf -> esp = sp;
 
@@ -857,7 +895,6 @@ int thread_join_os(thread_t thread, void ** retval){
   struct proc *p;
   int havekids;
   struct proc *curproc = myproc();
-  
   acquire(&ptable.lock);
   for(;;){
     // Scan through table looking for exited children.
@@ -880,17 +917,30 @@ int thread_join_os(thread_t thread, void ** retval){
        
   	if(p->pgdir == 0)
     	  panic("freevm: no pgdir");
-
 	  
-        /*
-  	for(i = 0; i < NPDENTRIES; i++){
-    	  if(pgdir[i] & PTE_P){
-      	    char * v = P2V(PTE_ADDR(pgdir[i]));
+       /* 
+  	for(int i = 600; i < NPDENTRIES; i++){
+    	  if(p->pgdir[i] & PTE_P){
+      	    char * v = P2V(PTE_ADDR(p->pgdir[i]));
             kfree(v);
    	  }	
  	}
-  	kfree((char*)pgdir);}*/
+  	kfree((char*)pgdir);*/
         p->pid = 0;
+	p->parent->thread[p->tid] = 0;
+	if(p->parent->mtid == p -> tid) {
+		for(int i = p->tid; i > 0; i=i-1){
+			if(p->parent->thread[i] == 1) {
+				p->parent->mtid = i;
+				break;
+			}
+			if(i == 1) {
+			  p->parent->mtid = 1;
+			}
+		}
+	}
+	p->parent->sz = (p->parent->osz)+(2*((p->mtid))*PGSIZE);
+	p->tid = 0;
         p->parent = 0;
         p->name[0] = 0;
         p->killed = 0;
@@ -936,7 +986,6 @@ void thread_exit_os(void *retval){
 
   acquire(&ptable.lock);
   wakeup1(curproc->parent);
-
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == curproc){

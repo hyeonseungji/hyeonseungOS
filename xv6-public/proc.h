@@ -80,8 +80,11 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   int share;		       // used in stride scheduling
-  struct thread thread[100];   // thread per one process(total 100)
-  int tid;		       // number of theread that process made
+  int thread[100];             // thread per one process(total 100)
+  uint tid;		       // tid of one theread that process made
+  uint osz;			// original size of process(except stack)
+  uint mtid;			// max tid of process(if stack is mapping on 1, 3, 9 then 9 is the max size)
+  uint mapno;			// mapping number of thread 
   void* retval;		       // return value of thread
 };
 
