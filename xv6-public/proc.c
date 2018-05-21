@@ -848,14 +848,14 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
 	acquire(&ptable.lock);
 	np -> state = RUNNABLE;
 	release(&ptable.lock);
-	cprintf("thread_create:end\n");
+	/*cprintf("thread_create:end\n");*/
 	return 0;
 }
 
 int thread_join_os(thread_t thread, void ** retval){
   
   struct proc *p;
-  int havekids, pid;
+  int havekids;
   struct proc *curproc = myproc();
   
   acquire(&ptable.lock);
@@ -868,7 +868,6 @@ int thread_join_os(thread_t thread, void ** retval){
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
-        pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
         /*freevm(p->pgdir);*/ //이 부분은 수정요망.
@@ -897,7 +896,7 @@ int thread_join_os(thread_t thread, void ** retval){
         p->killed = 0;
         p->state = UNUSED;
         release(&ptable.lock);
-        return pid;
+        return 0;
       }
     }
 
@@ -947,7 +946,7 @@ void thread_exit_os(void *retval){
     }
   }
 
-  cprintf("\n\nexit!%d\n",myproc()->pid);
+  /*cprintf("\n\nexit!%d\n",myproc()->pid);*/
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   sched();

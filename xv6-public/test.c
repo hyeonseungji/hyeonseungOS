@@ -17,6 +17,7 @@ main(int argc, char *argv[])
   printf(1,"t1:%d\n",t1);
   thread_join(t1, &retval);
   printf(1,"I sleep for %d\n",(int)retval);
+  printf(1, "g_a in main  : (%d)\n",g_a++);
   exit();
 }
 
@@ -28,7 +29,7 @@ void* printj(void * arg){
 	printf(1, "printj: good!\n");
 	printf(1, "printj:arg %d good!\n", a);
 	printf(1, "printj:b %d c %d good!\n", b,c);
-	printf(1, "g_a addr : (%d)\n",&g_a);
+	printf(1, "g_a in printj  : (%d)\n",g_a++);
 	printj2();
 	thread_exit(retval);
 	printf(1,"nononononononono\n");
