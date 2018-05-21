@@ -12,7 +12,7 @@
 void thread_exit(void *retval){
 
 	/*cprintf("thread_exit : retval is %d\n",(int*)retval);*/
-	thread_exit_os(retval);
+	thread_exit_os(retval,0);
 }
 
 int thread_exit_w(void) {

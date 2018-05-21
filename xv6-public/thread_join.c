@@ -10,7 +10,7 @@
 
 int thread_join(thread_t thread, void ** retval){
 	/*cprintf("thread_on join is %d\n",thread);*/
-	return thread_join_os(thread, retval);
+	return thread_join_os(thread, retval, 0,0);
 
 }
 

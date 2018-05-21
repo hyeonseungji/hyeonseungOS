@@ -81,10 +81,11 @@ struct proc {
   char name[16];               // Process name (debugging)
   int share;		       // used in stride scheduling
   int thread[100];             // thread per one process(total 100)
+  int thread_p[100];		// thread(including tid) list
   uint tid;		       // tid of one theread that process made
   uint osz;			// original size of process(except stack)
   uint mtid;			// max tid of process(if stack is mapping on 1, 3, 9 then 9 is the max size)
-  uint mapno;			// mapping number of thread 
+  /*uint mapno;*/			// mapping number of thread 
   void* retval;		       // return value of thread
 };
 
@@ -95,5 +96,5 @@ struct proc {
 //   expandable heap
 
 int thread_create_os(thread_t* thread, void*(*start_routine)(void*),void * arg);
-int thread_join_os(thread_t thread, void** retval);
-void thread_exit_os(void *retval);
+int thread_join_os(thread_t thread, void** retval, int select, thread_t original_thread);
+void thread_exit_os(void *retval, thread_t thread);

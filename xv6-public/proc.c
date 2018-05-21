@@ -307,7 +307,12 @@ wait(void)
 	for(int i = 1; i < 100; i++){
 	 if(p->thread[i] == 1){
 		cprintf("i here boys\n");
-		break;
+		release(&ptable.lock);
+		thread_exit_os((void*)0,p->thread_p[i]);
+		cprintf("i here boys2\n");
+		thread_join_os(p->thread_p[i],(void*)0,1,p->pid);
+		cprintf("i here boys3\n");
+		acquire(&ptable.lock);
 	 }
 	}
         pid = p->pid;
@@ -803,12 +808,13 @@ procdump(void)
   }
 }
 
-uint mapper(struct proc * p){
+uint mapper(struct proc * p, struct proc * np){
 	uint i;
 
 	for(i = 1; i < 100; i++){
 		if(p->thread[i] == 0) {
 			p->thread[i] = 1;
+			p->thread_p[i] = np -> pid;
 			if(p->mtid <= i) {
 				p -> mtid = i;
 			}
@@ -847,7 +853,7 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
 		cprintf("osz:%d\n",p->osz);
 	}
 
-	sz = PGROUNDUP((p->osz)+(2*((np->tid = mapper(p))-1)*PGSIZE));   //PGROUNDUP(p->sz);
+	sz = PGROUNDUP((p->osz)+(2*((np->tid = mapper(p,np))-1)*PGSIZE));   //PGROUNDUP(p->sz);
 
 	if((sz = allocuvm(p->pgdir, sz, sz + 2*PGSIZE)) == 0){
 	 cprintf("allocuvm: error!\n");
@@ -890,8 +896,8 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
 	return 0;
 }
 
-int thread_join_os(thread_t thread, void ** retval){
-  
+int thread_join_os(thread_t thread, void ** retval, int select, thread_t original_thread){
+  //select 0(case of normal join), select 1(case of Emergency join)
   struct proc *p;
   int havekids;
   struct proc *curproc = myproc();
@@ -900,9 +906,19 @@ int thread_join_os(thread_t thread, void ** retval){
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+     if(select == 0) {
       if((p->parent != curproc) || (p -> pid != thread))
         continue;
-      havekids = 1;
+     }
+     if(select == 1) {
+	if((p->pid != thread) /*|| (p->parent->pid != original_thread)*/) {
+	  continue;
+	}
+     } 
+      if(select == 0) {
+        havekids = 1;
+      }
+
       if(p->state == ZOMBIE){
         // Found one.
         kfree(p->kstack);
@@ -951,20 +967,43 @@ int thread_join_os(thread_t thread, void ** retval){
     }
 
     // No point waiting if we don't have any children.
+    if(select == 0) {
     if(!havekids || curproc->killed){
       release(&ptable.lock);
       return -1;
     }
+   }
 
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    if(select == 0) {
     sleep(curproc, &ptable.lock);  //DOC: wait-sleep
+    }
+    /*else{	//This is case of Emergency join(other lwp exit)
+    panic("thread_join");
+    }*/
   }
 }
 
-void thread_exit_os(void *retval){
- 
-  struct proc *curproc = myproc();
+void thread_exit_os(void *retval, thread_t thread){
+ //if thread value is 0, it's normal exit, but not 0, emergency exit.
+  struct proc *curproc = 0;
   struct proc *p;
+
+  if(thread != 0) {
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == thread){
+      curproc = p;
+      break;
+    }
+   }
+   release(&ptable.lock);
+  }
+
+  if(thread == 0) {
+    curproc = myproc();
+  }
+
   int fd;
   if(curproc == initproc)
     panic("init exiting");
@@ -998,6 +1037,10 @@ void thread_exit_os(void *retval){
   /*cprintf("\n\nexit!%d\n",myproc()->pid);*/
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+  if(thread != 0) {
+	release(&ptable.lock);
+	return;
+  }
   sched();
   panic("zombie exit");
 }
