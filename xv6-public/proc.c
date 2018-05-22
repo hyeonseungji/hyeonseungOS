@@ -252,7 +252,63 @@ exit(void)
   if(curproc == initproc)
     panic("init exiting");
 
+  if(curproc -> tid != 0) {
+        cprintf("pp! tid:%d, pid:%d",curproc->tid,curproc->pid);
+  acquire(&ptable.lock);
+  // Pass abandoned children to init.
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->parent == curproc->parent){
+      p->state = UNUSED;
+    }
+  }
+  release(&ptable.lock);
+  for(fd = 0; fd < NOFILE; fd++){
+    if(curproc->parent->ofile[fd]){
+      fileclose(curproc->parent->ofile[fd]);
+      curproc->parent->ofile[fd] = 0;
+    }
+  }
+
+  begin_op();
+  iput(curproc->parent->cwd);
+  end_op();
+  curproc->parent->cwd = 0;
+  acquire(&ptable.lock);
+  wakeup1(curproc->parent->parent);
+  curproc->parent->state = ZOMBIE;
+  cprintf("fin...pid:%d ppid:%d pppid :%d\n",curproc->pid, curproc->parent->pid, curproc->parent->parent->pid);
+  sched();
+}
+/*
+	p = curproc -> parent; 
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        p->state = UNUSED;
+	p->mtid = 0;
+        kfree(p->kstack);
+	cprintf("XXX");
+        p->kstack = 0;
+        freevm(p->pgdir);
+	sched();*/
+	/*for(int i = 1; i < 100; i++){
+		if(curproc -> parent -> thread[i] == 1){
+			if(curproc -> pid != curproc->parent->thread_p[i]) {
+		  		thread_exit_os((void*)0,curproc->parent->thread_p[i]);
+cprintf("%d!",i);
+				thread_join_os(curproc->parent->thread_p[i],(void*)0,1,curproc -> pid);
+cprintf("%d!",i);
+		        }
+	         }
+         }
+    cprintf("parent?:%d\n",curproc -> parent ->parent->parent-> pid);
+    curproc -> parent -> state = ZOMBIE;
+    cprintf("hello digimon\n");
+   }*/
+
   // Close all open files.
+  cprintf("[exit]p->pid:%d,p->ppid:%d,p->tid:%d\n",curproc->pid,curproc->parent->pid,curproc->tid);
   for(fd = 0; fd < NOFILE; fd++){
     if(curproc->ofile[fd]){
       fileclose(curproc->ofile[fd]);
@@ -278,7 +334,7 @@ exit(void)
         wakeup1(initproc);
     }
   }
-
+  cprintf("xxxxxx\n");
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   sched();
@@ -306,13 +362,16 @@ wait(void)
         // Found one.
 	for(int i = 1; i < 100; i++){
 	 if(p->thread[i] == 1){
+		pushcli();
 		cprintf("i here boys\n");
 		release(&ptable.lock);
 		thread_exit_os((void*)0,p->thread_p[i]);
 		cprintf("i here boys2\n");
 		thread_join_os(p->thread_p[i],(void*)0,1,p->pid);
 		cprintf("i here boys3\n");
+		p->thread[i] = 0;
 		acquire(&ptable.lock);
+		popcli();
 	 }
 	}
         pid = p->pid;
@@ -324,7 +383,10 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+	p->mtid = 0;
         release(&ptable.lock);
+	curproc->state = RUNNABLE;
+	cprintf("eee pid:%d",curproc->pid);
         return pid;
       }
     }
@@ -545,6 +607,7 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+	
      if(p->state != RUNNABLE) {
       continue;
      }
@@ -582,6 +645,8 @@ scheduler(void)
      p->state = RUNNING;
 
      mlfq[p->pid].my_tick = ticks;
+
+
      swtch(&(c->scheduler), p->context);
      switchkvm();
      mlfq[p->pid].sum_tick = mlfq[p->pid].sum_tick + (ticks - mlfq[p->pid].my_tick);
@@ -810,10 +875,11 @@ procdump(void)
 
 uint mapper(struct proc * p, struct proc * np){
 	uint i;
-
 	for(i = 1; i < 100; i++){
 		if(p->thread[i] == 0) {
 			p->thread[i] = 1;
+			if(p->pid > 5060)
+	  		   cprintf("p->mtid:%d and i %d\n",p->mtid,i);
 			p->thread_p[i] = np -> pid;
 			if(p->mtid <= i) {
 				p -> mtid = i;
@@ -826,7 +892,6 @@ uint mapper(struct proc * p, struct proc * np){
 }
 
 int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg){
-	
 	struct proc * p = myproc();
 	struct proc * np = allocproc();
 
@@ -852,11 +917,12 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
 		p->osz = PGROUNDUP(p->sz);
 		cprintf("osz:%d\n",p->osz);
 	}
-
+	pushcli();
 	sz = PGROUNDUP((p->osz)+(2*((np->tid = mapper(p,np))-1)*PGSIZE));   //PGROUNDUP(p->sz);
 
 	if((sz = allocuvm(p->pgdir, sz, sz + 2*PGSIZE)) == 0){
 	 cprintf("allocuvm: error!\n");
+	 popcli();
 	 return -1;
 	}
 	clearpteu(p->pgdir, (char*)(sz - 2*PGSIZE));
@@ -865,6 +931,7 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
 	sp = (sp - 4) & ~3;
 	if(copyout(p->pgdir, sp, arg, 4) < 0) {
 	 cprintf("copyout: error!\n");
+	popcli();
 	 return -1;
 	}
 
@@ -874,6 +941,7 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
 	sp -= 3 * 4;
 	if(copyout(p->pgdir, sp, ustack, 3*4) < 0) {
 	 cprintf("copuout[2]: error!\n");
+	 popcli();
 	 return -1;
 	}
 
@@ -893,6 +961,7 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
 	np -> state = RUNNABLE;
 	release(&ptable.lock);
 	/*cprintf("thread_create:end\n");*/
+	popcli();
 	return 0;
 }
 
