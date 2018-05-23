@@ -38,6 +38,9 @@ struct {
 } mlfq_lev[3];
 
 void
+MLFQ_out(struct proc *, int , int );
+
+void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
@@ -252,13 +255,12 @@ exit(void)
   if(curproc == initproc)
     panic("init exiting");
 
+//쓰레드가 main보다 먼저 종료된 경우입니다.
   if(curproc -> tid != 0) {
-        cprintf("pp! tid:%d, pid:%d",curproc->tid,curproc->pid);
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == curproc->parent){
 	if(p->pgdir != p->parent->pgdir){
-		cprintf("clear!\n");
 		continue;
 	}
       p->state = UNUSED;
@@ -279,9 +281,8 @@ exit(void)
   acquire(&ptable.lock);
   wakeup1(curproc->parent->parent);
   curproc->parent->state = ZOMBIE;
-  cprintf("fin...pid:%d ppid:%d pppid :%d\n",curproc->pid, curproc->parent->pid, curproc->parent->parent->pid);
+//exec의 경우를 가정한 조건문입니다. 이를 통해 독립적인 process로 발전합니다.
   if(curproc->pgdir != curproc->parent->pgdir) {
-	cprintf("clear2!\n");
 	curproc->parent->thread[curproc->tid] = 0;
 	curproc->parent = curproc -> parent -> parent;
 	curproc->tid = 0;
@@ -291,36 +292,17 @@ exit(void)
   release(&ptable.lock);
   return;
 }
-/*
-	p = curproc -> parent; 
-        p->pid = 0;
-        p->parent = 0;
-        p->name[0] = 0;
-        p->killed = 0;
-        p->state = UNUSED;
-	p->mtid = 0;
-        kfree(p->kstack);
-	cprintf("XXX");
-        p->kstack = 0;
-        freevm(p->pgdir);
-	sched();*/
-	/*for(int i = 1; i < 100; i++){
-		if(curproc -> parent -> thread[i] == 1){
-			if(curproc -> pid != curproc->parent->thread_p[i]) {
-		  		thread_exit_os((void*)0,curproc->parent->thread_p[i]);
-cprintf("%d!",i);
-				thread_join_os(curproc->parent->thread_p[i],(void*)0,1,curproc -> pid);
-cprintf("%d!",i);
-		        }
-	         }
-         }
-    cprintf("parent?:%d\n",curproc -> parent ->parent->parent-> pid);
-    curproc -> parent -> state = ZOMBIE;
-    cprintf("hello digimon\n");
-   }*/
-
-  // Close all open files.
-  cprintf("[exit]p->pid:%d,p->ppid:%d,p->tid:%d\n",curproc->pid,curproc->parent->pid,curproc->tid);
+     if(stride_table[curproc->pid].is_stride == 1){
+      stride_table[curproc->pid].full = 0;
+      stride_table[curproc->pid].is_stride = 0;
+      max_sum = max_sum - stride_table[curproc->pid].share;
+      table_size -= 1;
+      stride_table[0].share = 100 - max_sum;
+     }
+      
+      if(mlfq[curproc->pid].is_mlfq ==1){
+      MLFQ_out(curproc,mlfq[curproc->pid].lev,0);
+      }
   for(fd = 0; fd < NOFILE; fd++){
     if(curproc->ofile[fd]){
       fileclose(curproc->ofile[fd]);
@@ -346,7 +328,6 @@ cprintf("%d!",i);
         wakeup1(initproc);
     }
   }
-  cprintf("xxxxxx\n");
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   sched();
@@ -373,19 +354,29 @@ wait(void)
       if(p->state == ZOMBIE){
         // Found one.
 	for(int i = 1; i < 100; i++){
-	 if(p->thread[i] == 1){
+	 if(p->thread[i] == 1){ //main thread에서 thread가 종료되지 않고 남은 경우 이를 종료시킨 뒤 자원을 정리하는 작업입니다.
 		pushcli();
-		cprintf("i here boys\n");
 		release(&ptable.lock);
 		thread_exit_os((void*)0,p->thread_p[i]);
-		cprintf("i here boys2\n");
 		thread_join_os(p->thread_p[i],(void*)0,1,p->pid);
-		cprintf("i here boys3\n");
 		p->thread[i] = 0;
 		acquire(&ptable.lock);
 		popcli();
 	 }
 	}
+//stride와 mlfq 테이블에서 프로세스를 제거합니다. 
+     if(stride_table[p->pid].is_stride == 1){
+      stride_table[p->pid].full = 0;
+      stride_table[p->pid].is_stride = 0;
+      max_sum = max_sum - stride_table[p->pid].share;
+      table_size -= 1;
+      stride_table[0].share = 100 - max_sum;
+     }
+      
+      if(mlfq[p->pid].is_mlfq ==1){
+      MLFQ_out(p,mlfq[p->pid].lev,0);
+      }
+
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
@@ -398,7 +389,6 @@ wait(void)
 	p->mtid = 0;
         release(&ptable.lock);
 	curproc->state = RUNNABLE;
-	cprintf("eee pid:%d",curproc->pid);
         return pid;
       }
     }
@@ -644,11 +634,6 @@ scheduler(void)
      if(p->state != RUNNABLE) {
       continue;
      }
-     if(p->tid != 0) {
-	if(p->parent->state == UNUSED || p->parent->state == EMBRYO || p->parent->state == ZOMBIE){
-		cprintf("pid:%d, ppid:%d , exit maybe\n",p->pid,p->parent->pid);
-	}
-      }
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -657,7 +642,6 @@ scheduler(void)
      p->state = RUNNING;
 
      mlfq[p->pid].my_tick = ticks;
-
 
      swtch(&(c->scheduler), p->context);
      switchkvm();
@@ -886,12 +870,11 @@ procdump(void)
 }
 
 uint mapper(struct proc * p, struct proc * np){
+//mapper function은 thread create 할때, stack의 위치를 정해줍니다.
 	uint i;
 	for(i = 1; i < 100; i++){
 		if(p->thread[i] == 0) {
 			p->thread[i] = 1;
-			if(p->pid > 5060)
-	  		   cprintf("p->mtid:%d and i %d\n",p->mtid,i);
 			p->thread_p[i] = np -> pid;
 			if(p->mtid <= i) {
 				p -> mtid = i;
@@ -923,15 +906,13 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
           np->ofile[i] = filedup(p->ofile[i]);
         np->cwd = idup(p->cwd);
         safestrcpy(np->name, p->name, sizeof(p->name));
-       //커널 스택 할당 끝.
+       //커널 스택 할당.
 
-	if(p->osz == 0) {	//Original Size of Process(except user stack) set.
+	if(p->osz == 0) {	//osz는 프로세스가 쓰레드를 가지기 전의 p->sz를 기록한 것입니다.
 		p->osz = PGROUNDUP(p->sz);
-		cprintf("osz:%d\n",p->osz);
 	}
 	pushcli();
-	sz = PGROUNDUP((p->osz)+(2*((np->tid = mapper(p,np))-1)*PGSIZE));   //PGROUNDUP(p->sz);
-
+	sz = PGROUNDUP((p->osz)+(2*((np->tid = mapper(p,np))-1)*PGSIZE));
 	if((sz = allocuvm(p->pgdir, sz, sz + 2*PGSIZE)) == 0){
 	 cprintf("allocuvm: error!\n");
 	 popcli();
@@ -962,23 +943,18 @@ int thread_create_os(thread_t* thread, void*(*start_routine)(void *),void * arg)
 
 	np->sz = sz;
 	p -> sz = (p->osz)+(2*((p->mtid))*PGSIZE);
-	/*if(np -> pid > 4570)
-	cprintf("sz:%d, tid:%d, pid:%d, psz:%d\n",np->sz, np->tid, np->pid,p->sz);
-*/
 	np-> tf -> eip = (uint)start_routine;
 	np -> tf -> esp = sp;
 
-	//need to switch for this thread
 	acquire(&ptable.lock);
 	np -> state = RUNNABLE;
 	release(&ptable.lock);
-	/*cprintf("thread_create:end\n");*/
 	popcli();
 	return 0;
 }
 
 int thread_join_os(thread_t thread, void ** retval, int select, thread_t original_thread){
-  //select 0(case of normal join), select 1(case of Emergency join)
+  //select 0(case of normal join), select 1(case of Emergency join,쓰레드나 프로세스가 쓰레드가 있는 상태에서 급하게 종료한 경우)
   struct proc *p;
   int havekids;
   struct proc *curproc = myproc();
@@ -992,7 +968,7 @@ int thread_join_os(thread_t thread, void ** retval, int select, thread_t origina
         continue;
      }
      if(select == 1) {
-	if((p->pid != thread) /*|| (p->parent->pid != original_thread)*/) {
+	if((p->pid != thread)) {
 	  continue;
 	}
      } 
@@ -1004,8 +980,6 @@ int thread_join_os(thread_t thread, void ** retval, int select, thread_t origina
         // Found one.
         kfree(p->kstack);
         p->kstack = 0;
-        /*freevm(p->pgdir);*/ //이 부분은 수정요망.
-  	/*uint i;*/
 	*retval = (void*)p -> retval;
         if(p->parent->sz == p->sz) {
 	  p->parent->sz = (p->sz)-2*PGSIZE;
@@ -1014,15 +988,7 @@ int thread_join_os(thread_t thread, void ** retval, int select, thread_t origina
        
   	if(p->pgdir == 0)
     	  panic("freevm: no pgdir");
-	  
-       /* 
-  	for(int i = 600; i < NPDENTRIES; i++){
-    	  if(p->pgdir[i] & PTE_P){
-      	    char * v = P2V(PTE_ADDR(p->pgdir[i]));
-            kfree(v);
-   	  }	
- 	}
-  	kfree((char*)pgdir);*/
+	//차후 쓰레드 위치 재선정을 위해 값을 변경해줍니다.  
         p->pid = 0;
 	p->parent->thread[p->tid] = 0;
 	if(p->parent->mtid == p -> tid) {
@@ -1059,9 +1025,6 @@ int thread_join_os(thread_t thread, void ** retval, int select, thread_t origina
     if(select == 0) {
     sleep(curproc, &ptable.lock);  //DOC: wait-sleep
     }
-    /*else{	//This is case of Emergency join(other lwp exit)
-    panic("thread_join");
-    }*/
   }
 }
 
@@ -1084,7 +1047,20 @@ void thread_exit_os(void *retval, thread_t thread){
   if(thread == 0) {
     curproc = myproc();
   }
+	//쓰레드가 MLFQ나 Stride table에 있었을 수도 있으니 이들 리스트에서 제거하는 과정입니다.
+     if(stride_table[curproc->pid].is_stride == 1){
+      stride_table[curproc->pid].full = 0;
+      stride_table[curproc->pid].is_stride = 0;
+      max_sum = max_sum - stride_table[curproc->pid].share;
+      table_size -= 1;
+      stride_table[0].share = 100 - max_sum;
+     }
+      
+      if(mlfq[curproc->pid].is_mlfq ==1){
+      MLFQ_out(curproc,mlfq[curproc->pid].lev,0);
+      }
 
+     
   int fd;
   if(curproc == initproc)
     panic("init exiting");
@@ -1115,7 +1091,6 @@ void thread_exit_os(void *retval, thread_t thread){
     }
   }
 
-  /*cprintf("\n\nexit!%d\n",myproc()->pid);*/
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   if(thread != 0) {
