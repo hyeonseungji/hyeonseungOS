@@ -100,6 +100,10 @@ exec(char *path, char **argv)
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
   switchuvm(curproc);
+  if(curproc->tid != 0){
+	cprintf("eieieiei\n");
+	exit();
+  }
   freevm(oldpgdir);
   return 0;
 

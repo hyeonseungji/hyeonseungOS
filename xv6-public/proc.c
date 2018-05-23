@@ -255,9 +255,12 @@ exit(void)
   if(curproc -> tid != 0) {
         cprintf("pp! tid:%d, pid:%d",curproc->tid,curproc->pid);
   acquire(&ptable.lock);
-  // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == curproc->parent){
+	if(p->pgdir != p->parent->pgdir){
+		cprintf("clear!\n");
+		continue;
+	}
       p->state = UNUSED;
     }
   }
@@ -277,7 +280,16 @@ exit(void)
   wakeup1(curproc->parent->parent);
   curproc->parent->state = ZOMBIE;
   cprintf("fin...pid:%d ppid:%d pppid :%d\n",curproc->pid, curproc->parent->pid, curproc->parent->parent->pid);
+  if(curproc->pgdir != curproc->parent->pgdir) {
+	cprintf("clear2!\n");
+	curproc->parent->thread[curproc->tid] = 0;
+	curproc->parent = curproc -> parent -> parent;
+	curproc->tid = 0;
+	curproc->state = RUNNABLE;
+  }
   sched();
+  release(&ptable.lock);
+  return;
 }
 /*
 	p = curproc -> parent; 
