@@ -373,7 +373,7 @@ iunlockput(struct inode *ip)
 static uint
 bmap(struct inode *ip, uint bn)
 {
-  uint addr, *a;
+  uint addr, *a, *b;
   struct buf *bp;
 
   if(bn < NDIRECT){
@@ -398,7 +398,7 @@ bmap(struct inode *ip, uint bn)
   }
   bn -= NINDIRECT;
   if(bn < NINDIRECT * NINDIRECT){
-    if((addr = ip->addrs[NINDIRECT]) == 0) {
+    if((addr = ip->addrs[NDIRECT+1]) == 0) {
       ip->addrs[NDIRECT+1] = addr = balloc(ip->dev);
     }
     bp = bread(ip->dev,addr);
@@ -406,12 +406,13 @@ bmap(struct inode *ip, uint bn)
 
     if((addr = a[bn/NINDIRECT]) == 0) {
       a[bn/NINDIRECT] = addr = balloc(ip->dev);
+      log_write(bp);
     }
     brelse(bp);
     bp = bread(ip->dev,addr);
-    a = (uint*)bp->data;
-    if((addr = a[bn%NINDIRECT]) == 0){
-      a[bn%NINDIRECT] = addr = balloc(ip->dev);
+    b = (uint*)bp->data;
+    if((addr = b[bn%NINDIRECT]) == 0){
+      b[bn%NINDIRECT] = addr = balloc(ip->dev);
       log_write(bp);
     }
     brelse(bp);
@@ -489,6 +490,8 @@ readi(struct inode *ip, char *dst, uint off, uint n)
 
   for(tot=0; tot<n; tot+=m, off+=m, dst+=m){
     bp = bread(ip->dev, bmap(ip, off/BSIZE));
+    if(off/BSIZE != 0)
+    cprintf("off/BSIZE(2):%d\n",off/BSIZE);
     m = min(n - tot, BSIZE - off%BSIZE);
     memmove(dst, bp->data + off%BSIZE, m);
     brelse(bp);
