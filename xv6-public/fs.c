@@ -466,7 +466,6 @@ itrunc(struct inode *ip)
   int i, j, k,l;
   struct buf *bp, *cp, *dp;
   uint *a, *b, *c;
-
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
       bfree(ip->dev, ip->addrs[i]);
