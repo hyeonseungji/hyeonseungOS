@@ -396,14 +396,14 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
-  bn -= NINDIRECT;
+  bn -= NINDIRECT;	// Double indirect block alloc or load start
 
   if(bn < NINDIRECT * NINDIRECT){
     if((addr = ip->addrs[NDIRECT+1]) == 0) {
       ip->addrs[NDIRECT+1] = addr = balloc(ip->dev);
     }
     bp = bread(ip->dev,addr);
-    a = (uint*)bp->data;
+    a = (uint*)bp->data; // 'a' indicates first address table
 
     if((addr = a[bn/NINDIRECT]) == 0) {
       a[bn/NINDIRECT] = addr = balloc(ip->dev);
@@ -411,7 +411,7 @@ bmap(struct inode *ip, uint bn)
     }
     brelse(bp);
     bp = bread(ip->dev,addr);
-    b = (uint*)bp->data;
+    b = (uint*)bp->data; // 'b' indicates second(final) address table(i.e it indicates file block pointer)
     if((addr = b[bn%NINDIRECT]) == 0){
       b[bn%NINDIRECT] = addr = balloc(ip->dev);
       log_write(bp);
@@ -419,14 +419,15 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
-  bn -= NINDIRECT * NINDIRECT;
+  bn -= NINDIRECT * NINDIRECT;  // Triple indirect block alloc or load start
+
 
   if(bn < NINDIRECT * NINDIRECT * NINDIRECT){
     if((addr = ip->addrs[NDIRECT+2]) == 0) {
       ip->addrs[NDIRECT+2] = addr = balloc(ip->dev);
     }
     bp = bread(ip->dev,addr);
-    a = (uint*)bp->data;
+    a = (uint*)bp->data; // 'a' indicates first address table
 
     if((addr = a[bn/(NINDIRECT*NINDIRECT)]) == 0) {
       a[bn/(NINDIRECT*NINDIRECT)] = addr = balloc(ip->dev);
@@ -434,7 +435,7 @@ bmap(struct inode *ip, uint bn)
     }
     brelse(bp);
     bp = bread(ip->dev,addr);
-    b = (uint*)bp->data;
+    b = (uint*)bp->data; // 'b' indicates second address table
     cn = bn-((NINDIRECT*NINDIRECT)*(bn/(NINDIRECT*NINDIRECT)));
 
     if((addr = b[cn/NINDIRECT]) == 0){
@@ -443,7 +444,8 @@ bmap(struct inode *ip, uint bn)
     }
     brelse(bp);
     bp = bread(ip->dev,addr);
-    c = (uint*)bp->data;
+    c = (uint*)bp->data;  // 'c' indicates third(final) address table(i.e it indicates file block pointer)
+
 
    if((addr = c[cn%NINDIRECT]) == 0) {
      c[cn%NINDIRECT] = addr = balloc(ip->dev);
@@ -485,7 +487,7 @@ itrunc(struct inode *ip)
     ip->addrs[NDIRECT] = 0;
   }
 
-  if(ip->addrs[NDIRECT+1]){
+  if(ip->addrs[NDIRECT+1]){	//If there is double indirect block, then it truncate double indirect block after this statement.
     bp = bread(ip->dev, ip->addrs[NDIRECT+1]);
     a = (uint*)bp->data;
     for(j = 0; j < NINDIRECT; j++){
@@ -494,7 +496,8 @@ itrunc(struct inode *ip)
 	b = (uint*)cp->data;
 	for(k = 0; k < NINDIRECT; k++){
 	 if(b[k]){
-	  bfree(ip->dev, b[k]);
+	  bfree(ip->dev, b[k]); 
+// It truncates double indirect blcok by progressing for bootom-up. You can see that it first truncates file blocks then it truncates the lowest level of address table.
 	 }
 	}
 	brelse(cp);
@@ -507,7 +510,8 @@ itrunc(struct inode *ip)
     ip->addrs[NDIRECT+1] = 0;
   }
 
-  if(ip->addrs[NDIRECT+2]){
+  if(ip->addrs[NDIRECT+2]){ //If there is triple indirect block, then it truncate double indirect block after this statement.
+
     bp = bread(ip->dev, ip->addrs[NDIRECT+2]);
     a = (uint*)bp->data;
     for(j = 0; j < NINDIRECT; j++){
@@ -520,7 +524,8 @@ itrunc(struct inode *ip)
 	  c = (uint*)dp->data;
 	  for(l = 0; l < NINDIRECT; l++) {
 	    if(c[l]) {
-	    bfree(ip->dev, c[l]);
+	    bfree(ip->dev, c[l]); 
+// It truncates triple indirect blcok by progressing for bootom-up. You can see that it first truncates file blocks then it truncates the lowest level of address table.	
 	    } 
 	  }
 	  brelse(dp);
@@ -537,7 +542,7 @@ itrunc(struct inode *ip)
     ip->addrs[NDIRECT+2] = 0;
   }
 
-  ip->size = 0;
+  ip->size = 0; // After itrunc truncate all of file blocks and tables, it sets its size to 0 then update.
   iupdate(ip);
 }
 
