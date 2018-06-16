@@ -5,10 +5,14 @@
 #include "types.h"
 #include "defs.h"
 #include "param.h"
+#include "stat.h"
+#include "mmu.h"
+#include "proc.h"
 #include "fs.h"
 #include "spinlock.h"
 #include "sleeplock.h"
 #include "file.h"
+#include "fcntl.h"
 
 struct devsw devsw[NDEV];
 struct {
@@ -154,3 +158,65 @@ filewrite(struct file *f, char *addr, int n)
   panic("filewrite");
 }
 
+int pwrite_os(int fd, void* addr, int n, int off) {
+	struct file *f;
+	int r;
+	/*int pid = myproc()->pid;*/
+
+	if(fd < 0 || fd >= NOFILE || (f=myproc()->ofile[fd]) == 0){
+	 cprintf("[pwriete]error!\n");
+	 return -1;
+	}
+  	if(f->type == FD_INODE){
+    	// write a few blocks at a time to avoid exceeding
+    	// the maximum log transaction size, including
+    	// i-node, indirect block, allocation blocks,
+    	// and 2 blocks of slop for non-aligned writes.
+    	// this really belongs lower down, since writei()
+    	// might be writing a device like the console.
+    	int max = ((MAXOPBLOCKS-1-1-2) / 2) * 512;
+    	int i = 0;
+    	while(i < n){
+      		int n1 = n - i;
+      		if(n1 > max)
+        		n1 = max;
+
+      		begin_op();
+      		ilock(f->ip);
+      		if ((r = writei(f->ip, addr + i, off, n1)) > 0)
+        		off += r;
+		if(f->off < off) {
+			f->off = off;
+		}
+      		iunlock(f->ip);
+      		end_op();
+      		if(r < 0){
+			cprintf("whatthe!\n");
+        		break;
+		}
+      		if(r != n1)
+        		panic("short filewrite");
+      		i += r;
+    	}
+    	return i == n ? n : -1;
+  }
+  panic("filewrite");
+  return 0;
+}
+int pread_os(int fd, void* addr, int n, int off) {
+	struct file *f;
+	int r;
+	if(fd < 0 || fd >= NOFILE || (f=myproc()->ofile[fd]) == 0){
+	 cprintf("[pread]error!\n");
+	 return -1;
+	}
+  	if(f->type == FD_INODE){
+    	 ilock(f->ip);
+   	 if((r = readi(f->ip, addr, off, n)) > 0)
+      		off += r;
+    	 iunlock(f->ip);
+    	 return r;
+  	}
+  	panic("ErrorR on pread");
+  	return 0;
+}

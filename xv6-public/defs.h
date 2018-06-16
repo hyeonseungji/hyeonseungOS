@@ -193,5 +193,7 @@ int		getlev(void);
 int		thread_create(thread_t *, void * (*start_routine)(void*), void * );
 int		thread_join(thread_t, void **);
 void		thread_exit(void *);
+int		pwrite(int, void*, int, int);
+int		pread(int, void*, int, int);
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

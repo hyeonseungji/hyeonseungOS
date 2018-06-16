@@ -90,7 +90,7 @@ main(int argc, char *argv[])
     start = atoi(argv[1]);
   if (argc >= 3)
     end = atoi(argv[2]);
-
+  pread(1, (void*)0, 2, 3);
   for (i = start; i <= end; i++){
     printf(1,"%d. %s start\n", i, testname[i]);
     if (pipe(gpipe) < 0){

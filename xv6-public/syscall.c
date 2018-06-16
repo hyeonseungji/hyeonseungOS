@@ -110,6 +110,8 @@ extern int getlev(void);
 extern int thread_create_w(void);
 extern int thread_exit_w(void);
 extern int thread_join_w(void);
+extern int pwrite_w(void);
+extern int pread_w(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -141,6 +143,8 @@ static int (*syscalls[])(void) = {
 [SYS_thread_create] thread_create_w,
 [SYS_thread_exit] thread_exit_w,
 [SYS_thread_join] thread_join_w,
+[SYS_pwrite]	pwrite_w,
+[SYS_pread]	pread_w,
 };
 
 void

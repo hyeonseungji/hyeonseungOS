@@ -55,3 +55,5 @@ struct dirent {
   char name[DIRSIZ];
 };
 
+int pwrite_os(int fd, void* addr, int n, int off);
+int pread_os(int fd, void* addr, int n, int off);
