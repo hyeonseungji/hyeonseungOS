@@ -191,7 +191,7 @@ int pwrite_os(int fd, void* addr, int n, int off) {
         		n1 = max;
       		begin_op();
       		ilock(f->ip);
-		if(off > f->ip->size) {
+		if(off > f->ip->size) { //By this statement, os can avoid inappropriate error in 'writei' function. It sets new ip size.
 			int off_x = off;
 			int tot, m;
 			for(tot = 0; tot<n1; tot+=m, off_x+=m) {
@@ -202,9 +202,9 @@ int pwrite_os(int fd, void* addr, int n, int off) {
 		iunlock(f->ip);
       		if ((r = writei(f->ip, addr + i, off, n1)) > 0) {
         		off += r;
-		}
+		} //I just change the value of 'Filewrite' function(f->off  -> off).
 		ilock(f->ip);
-		if(f->off < off) {
+		if(f->off < off) { //It sets new file offset. New file offset is max value of input offsets(when user uses multicores).
 			f->off = off;
 		}
       		iunlock(f->ip);
@@ -221,6 +221,7 @@ int pwrite_os(int fd, void* addr, int n, int off) {
   panic("filewrite");
   return 0;
 }
+//This pread_os is almost same as 'fileread' except it uses input 'off' values not 'f->off' values.
 int pread_os(int fd, void* addr, int n, int off) {
 	struct file *f;
 	int r;

@@ -334,6 +334,9 @@ wait(void)
   }
 }
 
+/* Attention.
+From this MLFQ_in to MLFQ function, there are some exeception handling state ments like 'if(mlfq_lev[level].size <= 0) return'. This exeception is made when user uses multicore. So i made exception handling code. If you use single core, this exception handling code never operated. */
+
 void
 MLFQ_in(struct proc * p, int level,int code)
 {
@@ -368,11 +371,8 @@ if(code == 0){
 void
 MLFQ_out(struct proc * p, int level, int code)
 {
-	/*if(p -> state == ZOMBIE)
-		cprintf("zombie?\n");*/
 	if(mlfq_lev[level].size <= 0){
-	cprintf("(err) level : %d, p(arg) : %d, mlfq(real):%d\n",level,p->pid,mlfq_lev[level].size);
-	/*panic("MLFQ OUT ERROR")*/return;
+	 return;
 	}
 	else if (mlfq_lev[level].size == 1){
 	 mlfq_lev[level].size = (mlfq_lev[level].size) - 1;
