@@ -14,11 +14,21 @@
 #include "file.h"
 #include "fcntl.h"
 
+#define min(a, b) ((a) < (b) ? (a) : (b))
 struct devsw devsw[NDEV];
 struct {
   struct spinlock lock;
   struct file file[NFILE];
 } ftable;
+
+typedef struct node{
+	int from;
+	int to;
+	struct node* next;
+} node;
+
+node head[1000];
+node *fn;
 
 void
 fileinit(void)
@@ -161,7 +171,6 @@ filewrite(struct file *f, char *addr, int n)
 int pwrite_os(int fd, void* addr, int n, int off) {
 	struct file *f;
 	int r;
-	/*int pid = myproc()->pid;*/
 
 	if(fd < 0 || fd >= NOFILE || (f=myproc()->ofile[fd]) == 0){
 	 cprintf("[pwriete]error!\n");
@@ -180,18 +189,27 @@ int pwrite_os(int fd, void* addr, int n, int off) {
       		int n1 = n - i;
       		if(n1 > max)
         		n1 = max;
-
       		begin_op();
       		ilock(f->ip);
-      		if ((r = writei(f->ip, addr + i, off, n1)) > 0)
+		if(off > f->ip->size) {
+			int off_x = off;
+			int tot, m;
+			for(tot = 0; tot<n1; tot+=m, off_x+=m) {
+				m = min(n - tot, BSIZE - off%BSIZE);
+			}
+			f->ip->size = off_x;
+		}
+		iunlock(f->ip);
+      		if ((r = writei(f->ip, addr + i, off, n1)) > 0) {
         		off += r;
+		}
+		ilock(f->ip);
 		if(f->off < off) {
 			f->off = off;
 		}
       		iunlock(f->ip);
       		end_op();
       		if(r < 0){
-			cprintf("whatthe!\n");
         		break;
 		}
       		if(r != n1)

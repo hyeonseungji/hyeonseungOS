@@ -337,6 +337,9 @@ wait(void)
 void
 MLFQ_in(struct proc * p, int level,int code)
 {
+if(mlfq_lev[level].head == 0 || mlfq_lev[level].end == 0)
+	return;
+
 if(code == 0){
  mlfq[p->pid].my_tick = 0;
  mlfq[p->pid].sum_tick = 0;
@@ -367,18 +370,19 @@ MLFQ_out(struct proc * p, int level, int code)
 {
 	/*if(p -> state == ZOMBIE)
 		cprintf("zombie?\n");*/
-
 	if(mlfq_lev[level].size <= 0){
 	cprintf("(err) level : %d, p(arg) : %d, mlfq(real):%d\n",level,p->pid,mlfq_lev[level].size);
 	/*panic("MLFQ OUT ERROR")*/return;
 	}
 	else if (mlfq_lev[level].size == 1){
+	 mlfq_lev[level].size = (mlfq_lev[level].size) - 1;
    	 mlfq_lev[level].end = 0;
      	 mlfq_lev[level].head = 0;
 	}
 	else{
-	 if(mlfq_lev[level].head -> next == 0)
+	 if(mlfq_lev[level].head== 0)
 	  return;
+	mlfq_lev[level].size = (mlfq_lev[level].size) - 1;
  	mlfq_lev[level].head = mlfq_lev[level].head -> next;
  	mlfq_lev[level].end -> next = mlfq_lev[level].head;
  	mlfq_lev[level].head -> prev = mlfq_lev[level].end;
@@ -392,11 +396,9 @@ MLFQ_out(struct proc * p, int level, int code)
 	mlfq[p->pid].is_mlfq = -1;
 	mlfq[p->pid].lev = -1;
         mlfq[p->pid].run = 0;
-	mlfq_lev[level].size = mlfq_lev[level].size - 1;
         }
 
 	else{
-	 mlfq_lev[level].size = mlfq_lev[level].size - 1;
 	 mlfq[p->pid].next = 0;
 	 mlfq[p->pid].prev = 0;
 	 MLFQ_in(p,level,1);
@@ -409,11 +411,15 @@ MLFQ(void)
  tick_mlfq++;
  if(tick_mlfq % 100 == 0){
   for(int i = 1; i < 3; i++){
+    if(mlfq_lev[i].head== 0)
+     continue;
    if(mlfq_lev[i].size <= 0){
     continue;
    }
    else{
    for(int p = 0; p < mlfq_lev[i].size; p++){
+     if(mlfq_lev[i].head == 0)
+	continue;
      mlfq_lev[i].head -> run = 0;
      struct proc * p = mlfq_lev[i].head->proc;
      MLFQ_out(mlfq_lev[i].head->proc,i,0);
@@ -428,6 +434,8 @@ MLFQ(void)
   else
    continue;
   for(int p = 0; p < mlfq_lev[i].size; p++){
+   if(mlfq_lev[i].head == 0)
+	continue;
    if(mlfq_lev[i].head->proc->state != RUNNABLE){
     mlfq_lev[i].head -> run = 0;
     MLFQ_out(mlfq_lev[i].head->proc,i,1);
@@ -527,7 +535,7 @@ scheduler(void)
   c->proc = 0;
   int result; 
 
- initlock(&mlfq_lock,"mlfq");
+ /*initlock(&mlfq_lock,"mlfq");*/
 
  stride_table[0].share = 100;
  stride_table[0].pid = 2;
@@ -578,8 +586,10 @@ scheduler(void)
       // before jumping back to us.
      c->proc = p;
      switchuvm(p);
+     /*acquire(&mlfq_lock);*/
      p->state = RUNNING;
      mlfq[p->pid].my_tick = ticks;
+     /*release(&mlfq_lock);*/
      /*cprintf("pid:%d, cid:%d running now\n",p->pid,c->apicid);*/
      swtch(&(c->scheduler), p->context);
      switchkvm();
